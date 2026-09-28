@@ -1,0 +1,20 @@
+rules_version = '2';
+// Paste these into Firebase console → Firestore Database → Rules.
+// Only people listed in the "allowed" collection (document ID = their Gmail address) can sync.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function approved() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/allowed/$(request.auth.token.email));
+    }
+    // Each person can only read and write their own document.
+    match /users/{uid} {
+      allow read, write: if approved() && request.auth.uid == uid;
+    }
+    // Nobody can change the approved list from the app; you edit it in the console.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

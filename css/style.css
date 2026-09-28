@@ -244,3 +244,4 @@ body.mode-page #reader { display: none; }
 .plan-start input { font: inherit; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--text); width: 100%; margin-bottom: 12px; }
 .plan-foot { margin-top: 20px; text-align: center; }
 .plan-foot button { color: var(--muted); font-size: 13px; text-decoration: underline; }
+.sync-status { font-size: 14px; margin: 0 0 10px; line-height: 1.45; }

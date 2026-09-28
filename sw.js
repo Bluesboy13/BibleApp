@@ -1,9 +1,14 @@
 // Offline support: cache the app and the Bible text on first visit.
-const CACHE = 'kjv-v1';
+const CACHE = 'kjv-v2';
 const ASSETS = [
-  './', 'index.html', 'css/style.css', 'js/app.js', 'data/kjv.json',
-  'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
+  './', 'index.html', 'css/style.css', 'js/app.js', 'js/sync.js', 'js/firebase-config.js',
+  'vendor/firebase.js', 'data/kjv.json', 'manifest.webmanifest',
+  'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
+// Only the app itself and its web fonts are cached; sign-in and sync always go to the network.
+const CACHEABLE = (url) =>
+  url.origin === self.location.origin ||
+  url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -19,7 +24,8 @@ self.addEventListener('activate', (e) => {
 
 // Serve from cache, refresh in the background (stale-while-revalidate).
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || !CACHEABLE(url)) return;
   e.respondWith(
     caches.open(CACHE).then(async (cache) => {
       const cached = await cache.match(e.request, { ignoreSearch: true });

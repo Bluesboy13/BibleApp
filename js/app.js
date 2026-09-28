@@ -29,6 +29,8 @@
       ribbon: { ...DEFAULTS.ribbon, ...s.ribbon },
       bookmarks: Array.isArray(s.bookmarks) ? s.bookmarks : [],
       plan: { ...DEFAULTS.plan, ...s.plan, done: { ...(s.plan && s.plan.done) } },
+      updatedAt: s.updatedAt || 0,   // last change to synced data (ribbon, bookmarks, plan)
+      syncUid: s.syncUid || null,    // account this device last synced with
     };
   }
   let saveTimer = 0;
@@ -37,6 +39,17 @@
     saveTimer = setTimeout(() => {
       try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
     }, 250);
+  }
+  // Record a change to synced data. While signed in, changes are held until the first
+  // cloud check finishes so opening the app can't overwrite newer reading from another device.
+  let syncHold = !!state.syncUid;
+  setTimeout(() => { syncHold = false; }, 10000);
+  function touch() {
+    if (!syncHold) {
+      state.updatedAt = Date.now();
+      document.dispatchEvent(new Event('kjv:changed'));
+    }
+    save();
   }
 
   // ---------- Helpers ----------
@@ -263,7 +276,7 @@
     if (r.b === p.b && r.c === p.c && r.v === p.v) return;
     state.ribbon = p;
     updateTitle();
-    save();
+    touch();
   }
   function updateTitle() {
     const r = state.ribbon;
@@ -273,6 +286,8 @@
   function goTo(b, c, v, flash) {
     c = Math.min(Math.max(1, c), chapterCount(b));
     v = Math.max(1, v || 1);
+    const o = state.ribbon;
+    const moved = o.b !== b || o.c !== c || o.v !== v;
     state.ribbon = { b, c, v };
     if (state.settings.mode === 'page') {
       pageGoTo(b, c, v);
@@ -281,7 +296,7 @@
       scrollToVerse(c, v);
     }
     updateTitle();
-    save();
+    if (moved) touch(); else save();
     if (flash && v > 1) flashVerse(c, v);
   }
   function flashVerse(c, v) {
@@ -416,7 +431,7 @@
       return;
     }
     state.bookmarks.push({ b: r.b, c: r.c, v: r.v, t: Date.now() });
-    save();
+    touch();
     renderBookmarks();
     toast(`Saved ${ref(r)}`);
   });
@@ -428,7 +443,7 @@
     if (!bm) return;
     if (btn.classList.contains('del')) {
       state.bookmarks = state.bookmarks.filter((x) => x.t !== t);
-      save();
+      touch();
       renderBookmarks();
     } else {
       closePanels();
@@ -477,7 +492,7 @@
       $('#plan-begin').addEventListener('click', () => {
         const v = $('#plan-date').value || toISO(new Date());
         state.plan = { start: v, done: {}, active: null };
-        save();
+        touch();
         renderPlan();
       });
       return;
@@ -523,7 +538,7 @@
     $('#plan-reset').addEventListener('click', () => {
       if (confirm('Restart the reading plan? This clears your checked-off days.')) {
         state.plan = { start: null, done: {}, active: null };
-        save();
+        touch();
         hidePlanPill();
         renderPlan();
       }
@@ -554,7 +569,7 @@
   function setDayDone(d, done) {
     if (done) state.plan.done[d] = 1; else delete state.plan.done[d];
     if (done && state.plan.active === d) hidePlanPill();
-    save();
+    touch();
   }
   function startPlanDay(d) {
     closePanels();
@@ -609,6 +624,59 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
   }
   init();
+
+  // ---------- Sync hooks (used by js/sync.js) ----------
+  window.KJV = {
+    get uid() { return state.syncUid; },
+    // The data that follows you between devices. Display settings stay per-device.
+    syncData() {
+      return {
+        ribbon: state.ribbon,
+        bookmarks: state.bookmarks,
+        plan: { start: state.plan.start, done: state.plan.done },
+        updatedAt: state.updatedAt,
+      };
+    },
+    // Take in data from the cloud. On a device's first sync, merge instead of replacing.
+    applyRemote(remote, uid) {
+      const first = state.syncUid !== uid;
+      const before = { ...state.ribbon };
+      if (first) {
+        const seen = new Set(state.bookmarks.map((x) => x.t));
+        state.bookmarks = state.bookmarks.concat((remote.bookmarks || []).filter((x) => !seen.has(x.t)));
+        if (remote.plan && remote.plan.start) {
+          const sameStart = remote.plan.start === state.plan.start;
+          state.plan.start = remote.plan.start;
+          state.plan.done = sameStart ? { ...state.plan.done, ...remote.plan.done } : { ...remote.plan.done };
+        }
+        if ((remote.updatedAt || 0) > state.updatedAt && remote.ribbon) state.ribbon = remote.ribbon;
+        state.updatedAt = Date.now();
+      } else {
+        if (remote.ribbon) state.ribbon = remote.ribbon;
+        state.bookmarks = remote.bookmarks || [];
+        state.plan.start = remote.plan ? remote.plan.start : null;
+        state.plan.done = (remote.plan && remote.plan.done) || {};
+        state.updatedAt = remote.updatedAt || 0;
+      }
+      state.syncUid = uid;
+      save();
+      if (!BIBLE) return first;
+      const r = state.ribbon;
+      if (r.b !== before.b || r.c !== before.c || r.v !== before.v) {
+        const held = syncHold;
+        syncHold = true;   // moving to the synced spot isn't a new change
+        goTo(r.b, r.c, r.v);
+        syncHold = held;
+      }
+      if (!$('#panel-bm').hidden) renderBookmarks();
+      if (!$('#panel-plan').hidden) renderPlan();
+      showPlanPill();
+      return first;
+    },
+    setUid(uid) { state.syncUid = uid; save(); },
+    releaseHold() { syncHold = false; },
+    toast,
+  };
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

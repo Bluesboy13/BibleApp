@@ -9,7 +9,15 @@ A simple, book-like King James Bible reader. Plain HTML/CSS/JS, installable on p
 - **Reading plan:** Genesis to Revelation in 365 days (about 3–4 chapters a day), with days to check off.
 - **Themes:** Paper, White and Night, with adjustable text size and font.
 
-All data stays on your device (localStorage). The KJV text is public domain.
+Data is kept on the device (localStorage). Optionally, **Sign in with Google** (under **Aa**) syncs the ribbon, bookmarks and reading plan across devices through Firebase. Only Gmail addresses you approve can sync. The KJV text is public domain.
+
+## Sync setup (Firebase)
+1. Create a Firebase project, add a Web app, and paste its config values into `js/firebase-config.js`.
+2. Authentication → Sign-in method → enable **Google**. Under Settings → Authorized domains, add `bluesboy13.github.io`.
+3. Create a Firestore database, then paste `firestore.rules` into its **Rules** tab and publish.
+4. To approve someone: in Firestore, add a collection `allowed` with one document per person; the document ID is their Gmail address in lowercase (no fields needed). Delete the document to remove them.
+
+Each person's data lives in Firestore at `users/{their uid}`, never in this repo. `vendor/firebase.js` is a bundled copy of the Firebase JS SDK (app, auth, firestore/lite).
 
 ## Hosting on GitHub Pages
 Repo **Settings → Pages → Build and deployment**: Source = *Deploy from a branch*, pick the branch and `/ (root)`, then Save.
