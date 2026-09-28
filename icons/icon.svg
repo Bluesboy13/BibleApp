@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#f4eddc"/>
+  <rect x="96" y="80" width="320" height="360" rx="14" fill="#3b2a1e"/>
+  <rect x="112" y="92" width="290" height="336" rx="8" fill="#4a3526"/>
+  <path d="M256 150v150M206 200h100" stroke="#d9b56a" stroke-width="18" stroke-linecap="round"/>
+  <path d="M330 80h34v160l-17-14-17 14z" fill="#8b2a1f"/>
+  <text x="256" y="390" text-anchor="middle" font-family="Georgia, serif" font-size="44" letter-spacing="8" fill="#d9b56a">KJV</text>
+</svg>

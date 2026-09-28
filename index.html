@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KJV Bible</title>
+<meta name="description" content="A simple, book-like King James Bible reader.">
+<meta name="theme-color" content="#f4eddc">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="KJV Bible">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="hide-vn">
+
+<header id="topbar" class="bar">
+  <button id="btn-nav" class="title-btn" aria-label="Choose book and chapter"><span id="title">KJV</span><span class="caret">▾</span></button>
+  <div class="bar-actions">
+    <button id="btn-vn" class="icon-btn vn-btn" aria-pressed="false" aria-label="Show verse numbers" title="Verse numbers">¹²³</button>
+    <button id="btn-bm" class="icon-btn" aria-label="Bookmarks" title="Bookmarks">
+      <svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>
+    </button>
+    <button id="btn-plan" class="icon-btn" aria-label="Reading plan" title="Reading plan">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="1.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4M8.5 14.5l2.3 2.3 4.7-4.7"/></svg>
+    </button>
+    <button id="btn-set" class="icon-btn aa" aria-label="Display settings" title="Display settings">Aa</button>
+  </div>
+</header>
+
+<main id="reader">
+  <div id="loading">Opening…</div>
+  <article id="book" lang="en"></article>
+</main>
+
+<div id="pager" hidden>
+  <div id="flow" lang="en"></div>
+  <div id="pagefoot"></div>
+</div>
+
+<div id="planpill" hidden>
+  <span id="planpill-text"></span>
+  <button id="planpill-done">Mark done ✓</button>
+  <button id="planpill-x" aria-label="Close">✕</button>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- Panels -->
+<div id="scrim" hidden></div>
+
+<section id="panel-nav" class="panel" hidden aria-label="Books">
+  <div class="panel-head">
+    <button class="back" id="nav-back" hidden>‹ Books</button>
+    <h2 id="nav-title">Books</h2>
+    <button class="close" aria-label="Close">✕</button>
+  </div>
+  <div class="panel-body" id="nav-body"></div>
+</section>
+
+<section id="panel-bm" class="panel" hidden aria-label="Bookmarks">
+  <div class="panel-head"><h2>Bookmarks</h2><button class="close" aria-label="Close">✕</button></div>
+  <div class="panel-body">
+    <div class="ribbon-card">
+      <div class="ribbon-mark"></div>
+      <div>
+        <div class="label">Ribbon · where you left off</div>
+        <div id="ribbon-ref" class="ref"></div>
+      </div>
+    </div>
+    <button id="bm-add" class="primary wide"></button>
+    <h3>Saved spots</h3>
+    <ul id="bm-list" class="list"></ul>
+    <p id="bm-empty" class="muted">No saved spots yet.</p>
+  </div>
+</section>
+
+<section id="panel-plan" class="panel" hidden aria-label="Reading plan">
+  <div class="panel-head"><h2>Read Through the Bible</h2><button class="close" aria-label="Close">✕</button></div>
+  <div class="panel-body" id="plan-body"></div>
+</section>
+
+<section id="panel-set" class="panel small" hidden aria-label="Display settings">
+  <div class="panel-head"><h2>Display</h2><button class="close" aria-label="Close">✕</button></div>
+  <div class="panel-body">
+    <div class="row"><span>Text size</span>
+      <div class="seg"><button id="size-down" aria-label="Smaller text">A−</button><button id="size-up" aria-label="Larger text">A+</button></div>
+    </div>
+    <div class="row"><span>Font</span>
+      <div class="seg" id="set-font"><button data-v="literata">Literata</button><button data-v="garamond">Garamond</button></div>
+    </div>
+    <div class="row"><span>Theme</span>
+      <div class="seg" id="set-theme"><button data-v="paper">Paper</button><button data-v="white">White</button><button data-v="night">Night</button></div>
+    </div>
+    <div class="row"><span>Reading</span>
+      <div class="seg" id="set-mode"><button data-v="scroll">Scroll</button><button data-v="page">Pages</button></div>
+    </div>
+    <div class="row"><span>Verse numbers</span>
+      <div class="seg" id="set-vn"><button data-v="off">Off</button><button data-v="on">On</button></div>
+    </div>
+    <p class="muted small-note">In Pages mode: tap the right or left edge (or swipe) to turn pages. Tap the middle to show or hide the menu.</p>
+  </div>
+</section>
+
+<script src="js/app.js"></script>
+</body>
+</html>
