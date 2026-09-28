@@ -9,7 +9,7 @@ A simple, book-like King James Bible reader. Plain HTML/CSS/JS, installable on p
 - **Reading plan:** Genesis to Revelation in 365 days (about 3–4 chapters a day), with days to check off.
 - **Themes:** Paper, White and Night, with adjustable text size and font.
 
-Data is kept on the device (localStorage). Optionally, **Sign in with Google** (under **Aa**) syncs the ribbon, bookmarks and reading plan across devices through Firebase. Only Gmail addresses you approve can sync. The KJV text is public domain.
+Data is kept on the device (localStorage). Optionally, **Sign in with Google** (under **Aa**) syncs the ribbon, bookmarks and reading plan across devices through Firebase. Only Gmail addresses you approve can sync. The KJV text is public domain: the 1769 standard text, cross-checked verse by verse against three independent KJV copies. Paragraph breaks follow the KJV's own ¶ marks.
 
 ## Sync setup (Firebase)
 1. Create a Firebase project, add a Web app, and paste its config values into `js/firebase-config.js`.

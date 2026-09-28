@@ -62,7 +62,7 @@ body.bars-hidden .bar { transform: translateY(-100%); }
 .icon-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
 .icon-btn.aa { font-family: var(--serif); font-size: 19px; }
 .vn-btn { font-family: var(--serif); font-size: 17px; letter-spacing: 1px; }
-.vn-btn[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.vn-btn[aria-pressed="true"], .vn-btn[aria-pressed="true"]:hover { background: var(--text); color: var(--bg); }
 .title-btn:hover, .icon-btn:hover { background: var(--hover); }
 
 /* ---------- Scroll reader ---------- */
@@ -88,6 +88,7 @@ body.bars-hidden .bar { transform: translateY(-100%); }
 
 .chapter { margin: 0 0 1.6em; }
 .chapter p { margin: 0; text-align: justify; }
+.chapter p.para { text-indent: 1.4em; }
 .dropcap {
   float: left;
   font-size: 3.3em; line-height: .82;

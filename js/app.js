@@ -55,7 +55,7 @@
   // ---------- Helpers ----------
   const bookName = (b) => BIBLE[b][0];
   const chapterCount = (b) => BIBLE[b][1].length;
-  const verseText = (b, c, v) => (BIBLE[b][1][c - 1] || [])[v - 1] || '';
+  const verseText = (b, c, v) => ((BIBLE[b][1][c - 1] || [])[v - 1] || '').replace('¶', '');
   const ref = (p) => `${bookName(p.b)} ${p.c}:${p.v}`;
   const esc = (s) => s.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
 
@@ -77,9 +77,15 @@
   }
   function chapterHTML(b, c) {
     const verses = BIBLE[b][1][c - 1];
-    let h = `<section class="chapter${isPoetry(b, c) ? ' poetry' : ''}" data-c="${c}">`;
+    const poetry = isPoetry(b, c);
+    let h = `<section class="chapter${poetry ? ' poetry' : ''}" data-c="${c}">`;
     h += `<p><span class="dropcap">${c}</span>`;
     verses.forEach((t, i) => {
+      // ¶ marks a paragraph break in the KJV text; start a new paragraph there in prose.
+      if (t[0] === '¶') {
+        t = t.slice(1);
+        if (i > 0 && !poetry) h += '</p><p class="para">';
+      }
       h += `<span class="v${i === 0 ? ' first' : ''}" data-c="${c}" data-v="${i + 1}"><sup class="vn">${i + 1}</sup>${esc(t)} </span>`;
     });
     return h + '</p></section>';
