@@ -15,7 +15,7 @@
 
   // ---------- Saved state ----------
   const DEFAULTS = {
-    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20 },
+    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left' },
     ribbon: { b: 0, c: 1, v: 1 },
     bookmarks: [],
     plan: { start: null, done: {}, active: null },
@@ -326,12 +326,13 @@
     body.classList.remove('theme-paper', 'theme-white', 'theme-night', 'font-literata', 'font-garamond');
     body.classList.add('theme-' + s.theme, 'font-' + s.font);
     body.classList.toggle('hide-vn', !s.vn);
+    body.classList.toggle('justify', s.align === 'justify');
     body.classList.toggle('mode-page', s.mode === 'page');
     pager.hidden = s.mode !== 'page';
     document.documentElement.style.setProperty('--size', s.size + 'px');
     document.querySelector('meta[name="theme-color"]').content = THEME_COLORS[s.theme];
     $('#btn-vn').setAttribute('aria-pressed', String(s.vn));
-    for (const [id, val] of [['#set-font', s.font], ['#set-theme', s.theme], ['#set-mode', s.mode], ['#set-vn', s.vn ? 'on' : 'off']]) {
+    for (const [id, val] of [['#set-font', s.font], ['#set-theme', s.theme], ['#set-align', s.align], ['#set-mode', s.mode], ['#set-vn', s.vn ? 'on' : 'off']]) {
       $(id).querySelectorAll('button').forEach((btn) => btn.classList.toggle('on', btn.dataset.v === val));
     }
   }
@@ -357,6 +358,7 @@
   $('#size-up').addEventListener('click', () => changeSetting('size', Math.min(34, state.settings.size + 1)));
   $('#set-font').addEventListener('click', (e) => e.target.dataset.v && changeSetting('font', e.target.dataset.v));
   $('#set-theme').addEventListener('click', (e) => e.target.dataset.v && changeSetting('theme', e.target.dataset.v));
+  $('#set-align').addEventListener('click', (e) => e.target.dataset.v && changeSetting('align', e.target.dataset.v));
   $('#set-mode').addEventListener('click', (e) => e.target.dataset.v && changeSetting('mode', e.target.dataset.v));
   $('#set-vn').addEventListener('click', (e) => e.target.dataset.v && changeSetting('vn', e.target.dataset.v === 'on'));
 

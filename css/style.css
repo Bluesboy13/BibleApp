@@ -87,7 +87,9 @@ body.bars-hidden .bar { transform: translateY(-100%); }
 .ornament { text-align: center; color: var(--muted); margin: 0 0 1.4em; letter-spacing: .6em; font-size: .8em; }
 
 .chapter { margin: 0 0 1.6em; }
-.chapter p { margin: 0; text-align: justify; }
+.chapter p { margin: 0; text-align: left; text-wrap: pretty; }
+/* Justified is optional: on narrow screens it stretches the gaps between words. */
+body.justify .chapter:not(.poetry) p { text-align: justify; }
 .chapter p.para { text-indent: 1.4em; }
 .dropcap {
   float: left;

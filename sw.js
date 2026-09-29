@@ -1,5 +1,5 @@
 // Offline support: cache the app and the Bible text on first visit.
-const CACHE = 'kjv-v3';
+const CACHE = 'kjv-v4';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/sync.js', 'js/firebase-config.js',
   'vendor/firebase.js', 'data/kjv.json', 'manifest.webmanifest',
