@@ -15,7 +15,7 @@
 
   // ---------- Saved state ----------
   const DEFAULTS = {
-    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left', voice: '', rate: 0.9 },
+    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left', voice: '', rate: 0.9, follow: 'word' },
     ribbon: { b: 0, c: 1, v: 1 },
     bookmarks: [],
     plan: { start: null, done: {}, active: null },
@@ -328,12 +328,13 @@
     body.classList.add('theme-' + s.theme, 'font-' + s.font);
     body.classList.toggle('hide-vn', !s.vn);
     body.classList.toggle('justify', s.align === 'justify');
+    body.classList.toggle('follow-verse', s.follow === 'verse');
     body.classList.toggle('mode-page', s.mode === 'page');
     pager.hidden = s.mode !== 'page';
     document.documentElement.style.setProperty('--size', s.size + 'px');
     document.querySelector('meta[name="theme-color"]').content = THEME_COLORS[s.theme];
     $('#btn-vn').setAttribute('aria-pressed', String(s.vn));
-    for (const [id, val] of [['#set-font', s.font], ['#set-theme', s.theme], ['#set-align', s.align], ['#set-mode', s.mode], ['#set-vn', s.vn ? 'on' : 'off']]) {
+    for (const [id, val] of [['#set-font', s.font], ['#set-theme', s.theme], ['#set-align', s.align], ['#set-follow', s.follow], ['#set-mode', s.mode], ['#set-vn', s.vn ? 'on' : 'off']]) {
       $(id).querySelectorAll('button').forEach((btn) => btn.classList.toggle('on', btn.dataset.v === val));
     }
   }
@@ -910,6 +911,12 @@
     synth.addEventListener && synth.addEventListener('voiceschanged', fillVoices);
   }
   $('#btn-set').addEventListener('click', fillVoices);
+  $('#set-follow').addEventListener('click', (e) => {
+    if (!e.target.dataset.v) return;
+    state.settings.follow = e.target.dataset.v;   // display only: no need to re-lay out the page
+    applySettings();
+    save();
+  });
   $('#set-voice').addEventListener('change', (e) => {
     state.settings.voice = e.target.value;
     save();

@@ -283,3 +283,6 @@ body.playing #pagefoot { display: none; }
   .pbtn { width: 38px; }
   .pbtn.main { width: 44px; height: 44px; }
 }
+/* "Verse only" highlighting: keep the verse shaded, don't mark each word. */
+body.follow-verse .w.now { background: none; box-shadow: none; }
+body.follow-verse .v.reading { background: var(--flash); }
