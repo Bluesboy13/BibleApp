@@ -1,17 +1,26 @@
 // Offline support: cache the app and the Bible text on first visit.
-const CACHE = 'kjv-v4';
+// Bump CACHE whenever files change so phones pick up a complete, matching set.
+const CACHE = 'kjv-v5';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/sync.js', 'js/firebase-config.js',
   'vendor/firebase.js', 'data/kjv.json', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 // Only the app itself and its web fonts are cached; sign-in and sync always go to the network.
-const CACHEABLE = (url) =>
-  url.origin === self.location.origin ||
-  url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
+const isFont = (url) => url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
+// The app's code and page are checked with the server first so updates arrive together;
+// the large, rarely changing files (Bible text, SDK, icons, fonts) are served from the cache.
+const isAppCode = (url) =>
+  url.origin === self.location.origin && /(\/|\.html|\.js|\.css|\.webmanifest)$/.test(url.pathname) &&
+  !url.pathname.endsWith('/vendor/firebase.js');
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's HTTP cache so every file is the current version.
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(ASSETS.map((a) => new Request(a, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -22,20 +31,35 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Serve from cache, refresh in the background (stale-while-revalidate).
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || !CACHEABLE(url)) return;
-  e.respondWith(
-    caches.open(CACHE).then(async (cache) => {
-      const cached = await cache.match(e.request, { ignoreSearch: true });
-      const network = fetch(e.request)
-        .then((res) => {
-          if (res && (res.ok || res.type === 'opaque')) cache.put(e.request, res.clone());
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
-  );
+  if (e.request.method !== 'GET') return;
+  if (url.origin !== self.location.origin && !isFont(url)) return;
+  e.respondWith(isAppCode(url) ? networkFirst(e.request) : cacheFirst(e.request));
 });
+
+// Try the server (bypassing the HTTP cache); fall back to the saved copy when offline or slow.
+async function networkFirst(req) {
+  const cache = await caches.open(CACHE);
+  try {
+    const res = await Promise.race([
+      fetch(req, { cache: 'no-cache' }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
+    ]);
+    if (res.ok) cache.put(req, res.clone());
+    return res;
+  } catch (err) {
+    const cached = await cache.match(req, { ignoreSearch: true });
+    if (cached) return cached;
+    return fetch(req);
+  }
+}
+
+async function cacheFirst(req) {
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(req, { ignoreSearch: true });
+  if (cached) return cached;
+  const res = await fetch(req);
+  if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
+  return res;
+}
