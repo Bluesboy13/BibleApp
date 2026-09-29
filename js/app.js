@@ -702,7 +702,7 @@
   function speakFrom(pos, offset) {
     const token = ++player.token;
     synth.cancel();
-    clearTimeout(player.estTimer);
+    clearInterval(player.estTimer);
     player.pos = pos;
     player.word = offset;
     player.playing = true;
@@ -728,13 +728,22 @@
     u.pitch = 0.95;
     player.gotBoundary = false;
     u.onboundary = (e) => {
-      if (token !== player.token || (e.name && e.name !== 'word')) return;
+      if (token !== player.token) return;
+      if (e.name && e.name !== 'word') {
+        // Voices without word events may still report sentences: use them to resync the estimate.
+        if (!player.gotBoundary) resyncEstimate(token, e.charIndex);
+        return;
+      }
       player.gotBoundary = true;
-      clearTimeout(player.estTimer);
+      clearInterval(player.estTimer);
       highlight(offset + e.charIndex);
     };
-    u.onstart = () => { if (token === player.token) estimateWords(token, full, offset); };
-    u.onend = () => { if (token === player.token) nextVerse(); };
+    u.onstart = () => { if (token === player.token) estimateWords(token, full, offset, voice); };
+    u.onend = () => {
+      if (token !== player.token) return;
+      learnVoiceSpeed(token);
+      nextVerse();
+    };
     u.onerror = (e) => {
       if (token !== player.token || e.error === 'interrupted' || e.error === 'canceled') return;
       pausePlayer();
@@ -744,19 +753,53 @@
     setTimeout(() => { if (token === player.token) synth.speak(u); }, 60);
   }
   // Some voices don't report word positions; step through the words at speaking pace instead.
-  function estimateWords(token, full, offset) {
-    const perChar = 1000 / (14.5 * state.settings.rate);
+  // Some voices don't report word positions (common on iPhone). For those, estimate when each
+  // word is spoken from the voice's measured speed, allowing extra time at punctuation.
+  const voiceKey = (v) => (v ? v.voiceURI || v.name : 'default');
+  function estimateWords(token, full, offset, voice) {
+    clearInterval(player.estTimer);
     const words = [...full.slice(offset).matchAll(/\S+/g)];
+    const speeds = state.settings.cps || {};
+    const perSec = (speeds[voiceKey(voice)] || 15) * state.settings.rate;
+    let t = 0;
+    const times = words.map((w) => {
+      const at = t;
+      t += (w[0].length + 1 + (/[.?!]["’)]*$/.test(w[0]) ? 8 : /[,;:]["’)]*$/.test(w[0]) ? 4 : 0)) / perSec;
+      return at;
+    });
+    player.est = { token, words, times, total: t, offset, voice, start: performance.now(), shown: -1 };
+    player.estTimer = setInterval(() => {
+      const est = player.est;
+      if (!est || est.token !== player.token || player.gotBoundary) return clearInterval(player.estTimer);
+      const elapsed = (performance.now() - est.start) / 1000;
+      let i = est.shown < 0 ? 0 : est.shown;
+      while (i + 1 < est.times.length && est.times[i + 1] <= elapsed) i++;
+      if (i !== est.shown && est.words[i]) {
+        est.shown = i;
+        highlight(est.offset + est.words[i].index);
+      }
+    }, 60);
+  }
+  function resyncEstimate(token, charIndex) {
+    const est = player.est;
+    if (!est || est.token !== token) return;
     let i = 0;
-    const step = () => {
-      if (token !== player.token || player.gotBoundary || i >= words.length) return;
-      highlight(offset + words[i].index);
-      const len = words[i].index + words[i][0].length;
-      i++;
-      const next = i < words.length ? words[i].index : len;
-      player.estTimer = setTimeout(step, Math.max(120, (next - (words[i - 1].index)) * perChar));
-    };
-    player.estTimer = setTimeout(() => { if (!player.gotBoundary) step(); }, 450);
+    while (i + 1 < est.words.length && est.words[i + 1].index <= charIndex) i++;
+    est.start = performance.now() - est.times[i] * 1000;
+    est.shown = Math.min(est.shown, i - 1);
+  }
+  // After each verse, compare the estimate with how long the voice really took and adjust.
+  function learnVoiceSpeed(token) {
+    const est = player.est;
+    if (!est || est.token !== token || player.gotBoundary) return;
+    const elapsed = (performance.now() - est.start) / 1000;
+    if (elapsed < 1.5 || est.total <= 0) return;
+    const speeds = state.settings.cps || (state.settings.cps = {});
+    const key = voiceKey(est.voice);
+    const measured = (est.total / elapsed) * (speeds[key] || 15);
+    const next = Math.min(40, Math.max(6, (speeds[key] || 15) * 0.2 + measured * 0.8));
+    speeds[key] = Math.round(next * 100) / 100;
+    save();
   }
   function nextVerse() {
     const p = player.pos;
@@ -775,7 +818,7 @@
   function pausePlayer() {
     player.token++;
     player.playing = false;
-    clearTimeout(player.estTimer);
+    clearInterval(player.estTimer);
     synth.cancel();
     releaseWake();
     renderPlayer();
