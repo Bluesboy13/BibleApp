@@ -9,6 +9,7 @@
   --panel: #fbf7ec;
   --hover: rgba(0, 0, 0, 0.05);
   --flash: rgba(196, 140, 40, 0.28);
+  --read: rgba(196, 140, 40, 0.08);
   --serif: "Literata", Georgia, "Times New Roman", serif;
   --size: 20px;
   --measure: 34em;
@@ -16,12 +17,12 @@
 }
 body.theme-white {
   --bg: #ffffff; --text: #1d1d1d; --muted: #8a8a8a; --rule: #e2e2e2;
-  --bar: #ffffff; --panel: #ffffff; --flash: rgba(230, 180, 60, 0.3);
+  --bar: #ffffff; --panel: #ffffff; --flash: rgba(230, 180, 60, 0.3); --read: rgba(230, 180, 60, 0.1);
 }
 body.theme-night {
   --bg: #161412; --text: #cfc5b1; --muted: #857b6a; --rule: #3a342c;
   --accent: #c0503f; --bar: #161412; --panel: #211e1a;
-  --hover: rgba(255, 255, 255, 0.06); --flash: rgba(200, 150, 60, 0.25);
+  --hover: rgba(255, 255, 255, 0.06); --flash: rgba(200, 150, 60, 0.25); --read: rgba(200, 150, 60, 0.08);
 }
 body.font-garamond { --serif: "EB Garamond", Garamond, Georgia, serif; }
 
@@ -248,3 +249,37 @@ body.mode-page #reader { display: none; }
 .plan-foot { margin-top: 20px; text-align: center; }
 .plan-foot button { color: var(--muted); font-size: 13px; text-decoration: underline; }
 .sync-status { font-size: 14px; margin: 0 0 10px; line-height: 1.45; }
+
+/* ---------- Read aloud ---------- */
+.v.reading { background: var(--read); border-radius: 3px; }
+.w.now { background: var(--flash); border-radius: 3px; box-shadow: 0 0 0 1px var(--flash); }
+#player {
+  position: fixed; z-index: 16; left: 50%; transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  display: flex; align-items: center; gap: 2px;
+  width: min(520px, calc(100vw - 16px));
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 16px;
+  padding: 6px 8px; box-shadow: 0 6px 24px rgba(0,0,0,.16);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.pbtn { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; color: var(--text); }
+.pbtn svg { width: 22px; height: 22px; fill: currentColor; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+.pbtn.main { background: var(--accent); color: #fff; width: 48px; height: 48px; border-radius: 50%; }
+.pbtn.main svg { stroke: none; }
+.pbtn.rate { font-size: 14px; width: auto; padding: 0 8px; font-variant-numeric: tabular-nums; }
+.pbtn:hover { background: var(--hover); }
+.pbtn.main:hover { background: var(--accent); filter: brightness(1.08); }
+#player-ref { flex: 1; min-width: 0; text-align: center; font-family: var(--serif); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.playing #reader { padding-bottom: 200px; }
+body.playing #planpill { bottom: calc(80px + env(safe-area-inset-bottom)); }
+body.playing #pagefoot { display: none; }
+.voice-pick { display: flex; gap: 6px; min-width: 0; }
+.voice-pick select { min-width: 0; max-width: 190px; font: inherit; font-size: 14px; padding: 7px 8px; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); color: var(--text); }
+.voice-pick .secondary { padding: 7px 10px; font-size: 14px; }
+@media (max-width: 380px) {
+  .icon-btn { width: 38px; }
+  .title-btn { font-size: 17px; padding: 8px 6px; max-width: 40vw; }
+  .bar-actions { gap: 0; }
+  .pbtn { width: 38px; }
+  .pbtn.main { width: 44px; height: 44px; }
+}

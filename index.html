@@ -23,6 +23,9 @@
 <header id="topbar" class="bar">
   <button id="btn-nav" class="title-btn" aria-label="Choose book and chapter"><span id="title">KJV</span><span class="caret">▾</span></button>
   <div class="bar-actions">
+    <button id="btn-play" class="icon-btn" aria-label="Read aloud" title="Read aloud">
+      <svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+    </button>
     <button id="btn-vn" class="icon-btn vn-btn" aria-pressed="false" aria-label="Show verse numbers" title="Verse numbers">¹²³</button>
     <button id="btn-bm" class="icon-btn" aria-label="Bookmarks" title="Bookmarks">
       <svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>
@@ -42,6 +45,15 @@
 <div id="pager" hidden>
   <div id="flow" lang="en"></div>
   <div id="pagefoot"></div>
+</div>
+
+<div id="player" hidden>
+  <button id="player-prev" class="pbtn" aria-label="Previous verse"><svg viewBox="0 0 24 24"><path d="M7 6v12M18 6.5v11L9.5 12z"/></svg></button>
+  <button id="player-toggle" class="pbtn main" aria-label="Pause"></button>
+  <button id="player-next" class="pbtn" aria-label="Next verse"><svg viewBox="0 0 24 24"><path d="M17 6v12M6 6.5v11l8.5-5.5z"/></svg></button>
+  <span id="player-ref"></span>
+  <button id="player-rate" class="pbtn rate" aria-label="Reading speed">1×</button>
+  <button id="player-close" class="pbtn" aria-label="Stop reading">✕</button>
 </div>
 
 <div id="planpill" hidden>
@@ -106,6 +118,9 @@
     </div>
     <div class="row"><span>Verse numbers</span>
       <div class="seg" id="set-vn"><button data-v="off">Off</button><button data-v="on">On</button></div>
+    </div>
+    <div class="row"><span>Voice</span>
+      <div class="voice-pick"><select id="set-voice" aria-label="Reading voice"></select><button id="voice-test" class="secondary">Test</button></div>
     </div>
     <h3>Sync</h3>
     <p id="sync-status" class="muted sync-status">Loading…</p>

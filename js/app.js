@@ -15,7 +15,7 @@
 
   // ---------- Saved state ----------
   const DEFAULTS = {
-    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left' },
+    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left', voice: '', rate: 0.9 },
     ribbon: { b: 0, c: 1, v: 1 },
     bookmarks: [],
     plan: { start: null, done: {}, active: null },
@@ -155,7 +155,7 @@
       }
       lastY = y;
       const p = scrollPosition();
-      if (p) setRibbon(p);
+      if (p && !player.playing) setRibbon(p);   // while reading aloud, the voice sets the place
     });
   }, { passive: true });
 
@@ -173,7 +173,7 @@
 
   function layoutPager() {
     const padX = Math.max(24, Math.round((window.innerWidth - 680) / 2));
-    const top = 40, bottom = 48;
+    const top = 40, bottom = document.body.classList.contains('playing') ? 96 : 48;   // room for the player bar
     flow.style.left = padX + 'px';
     flow.style.width = (window.innerWidth - padX * 2) + 'px';
     flow.style.top = `calc(env(safe-area-inset-top) + ${top}px)`;
@@ -304,6 +304,7 @@
     updateTitle();
     if (moved) touch(); else save();
     if (flash && v > 1) flashVerse(c, v);
+    if (player.active) afterNavigate(b, c, v);
   }
   function flashVerse(c, v) {
     const root = state.settings.mode === 'page' ? flow : bookEl;
@@ -604,6 +605,284 @@
     toast(`Day ${d + 1} complete ✓`);
   });
   $('#planpill-x').addEventListener('click', hidePlanPill);
+
+  // ---------- Read aloud ----------
+  // Uses the device's built-in voices (works offline). Reads verse by verse, highlights the
+  // word being spoken, and keeps it in view.
+  const synth = window.speechSynthesis;
+  const player = {
+    active: false,     // player bar is open
+    playing: false,
+    pos: null,         // { b, c, v } being read
+    word: 0,           // char index of the current word within the verse
+    token: 0,          // bumps on every stop/restart so stale speech events are ignored
+    internal: false,   // true while the player itself is moving the page
+    lastUser: 0,       // last time the reader scrolled or turned a page by hand
+    gotBoundary: false,
+    estTimer: 0,
+    wakeLock: null,
+  };
+  const RATES = [0.75, 0.9, 1, 1.1, 1.25];
+  // Voices that suit a mature British reader, best first.
+  const PREFERRED_VOICES = [/arthur/i, /daniel/i, /george/i, /oliver/i, /malcolm/i, /ryan/i, /thomas/i, /en-gb.*male/i];
+
+  // Say "LORD"/"GOD" as words, not letters. Same length, so highlight positions still line up.
+  const spoken = (t) => t.replace(/\b([A-Z])([A-Z]+)\b/g, (m, a, rest) => a + rest.toLowerCase());
+
+  function englishVoices() {
+    const vs = synth ? synth.getVoices().filter((v) => /^en[-_]/i.test(v.lang)) : [];
+    const gb = (v) => (/^en[-_]gb/i.test(v.lang) ? 0 : 1);
+    return vs.sort((a, z) => gb(a) - gb(z) || a.name.localeCompare(z.name));
+  }
+  function currentVoice() {
+    const vs = englishVoices();
+    const saved = vs.find((v) => v.voiceURI === state.settings.voice);
+    if (saved) return saved;
+    for (const re of PREFERRED_VOICES) {
+      const hit = vs.find((v) => /^en[-_]gb/i.test(v.lang) && re.test(v.name + ' ' + v.voiceURI));
+      if (hit) return hit;
+    }
+    return vs.find((v) => /^en[-_]gb/i.test(v.lang)) || vs[0] || null;
+  }
+
+  function readerRoot() { return state.settings.mode === 'page' ? flow : bookEl; }
+  function verseEl(p) { return readerRoot().querySelector(`.v[data-c="${p.c}"][data-v="${p.v}"]`); }
+
+  // Split the verse into word spans (only for the verse being read).
+  function wrapVerse(el, text) {
+    if (el.dataset.wrapped) return;
+    const sup = el.querySelector('.vn');
+    let h = sup ? sup.outerHTML : '';
+    const re = /\S+/g;
+    let m, last = 0;
+    while ((m = re.exec(text))) {
+      h += esc(text.slice(last, m.index)) + `<span class="w" data-i="${m.index}">${esc(m[0])}</span>`;
+      last = m.index + m[0].length;
+    }
+    el.innerHTML = h + ' ';
+    el.dataset.wrapped = '1';
+  }
+  function clearHighlight() {
+    document.querySelectorAll('.v.reading').forEach((el) => el.classList.remove('reading'));
+    document.querySelectorAll('.w.now').forEach((el) => el.classList.remove('now'));
+  }
+  function highlight(charIndex) {
+    const el = verseEl(player.pos);
+    if (!el) return;
+    wrapVerse(el, verseText(player.pos.b, player.pos.c, player.pos.v));
+    el.classList.add('reading');
+    let target = null;
+    for (const w of el.querySelectorAll('.w')) {
+      if (+w.dataset.i <= charIndex) target = w; else break;
+    }
+    readerRoot().querySelectorAll('.w.now').forEach((w) => { if (w !== target) w.classList.remove('now'); });
+    if (!target) return;
+    target.classList.add('now');
+    player.word = +target.dataset.i;
+    keepInView(target);
+  }
+  function keepInView(el) {
+    if (Date.now() - player.lastUser < 4000) return;   // don't fight the reader's own scrolling
+    if (state.settings.mode === 'page') {
+      const p = pageOf(el);
+      if (p !== pg.page) showPage(p, true);
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    const top = topOffset() + 30, bottom = window.innerHeight - 150;
+    if (r.top < top || r.bottom > bottom) {
+      window.scrollTo({ top: window.scrollY + r.top - window.innerHeight * 0.3, behavior: 'smooth' });
+    }
+  }
+  ['touchstart', 'wheel'].forEach((ev) => window.addEventListener(ev, (e) => {
+    if (!e.target.closest || !e.target.closest('#player')) player.lastUser = Date.now();
+  }, { passive: true }));
+  window.addEventListener('keydown', () => { player.lastUser = Date.now(); });
+
+  function speakFrom(pos, offset) {
+    const token = ++player.token;
+    synth.cancel();
+    clearTimeout(player.estTimer);
+    player.pos = pos;
+    player.word = offset;
+    player.playing = true;
+    renderPlayer();
+
+    // Move the page to this verse if it isn't on screen (e.g. a new chapter).
+    const r = state.ribbon;
+    if (r.b !== pos.b || r.c !== pos.c || !verseEl(pos)) {
+      player.internal = true;
+      goTo(pos.b, pos.c, pos.v);
+      player.internal = false;
+    } else {
+      setRibbon(pos);
+    }
+    clearHighlight();
+    highlight(offset);
+
+    const full = spoken(verseText(pos.b, pos.c, pos.v));
+    const u = new SpeechSynthesisUtterance(full.slice(offset));
+    const voice = currentVoice();
+    if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-GB';
+    u.rate = state.settings.rate;
+    u.pitch = 0.95;
+    player.gotBoundary = false;
+    u.onboundary = (e) => {
+      if (token !== player.token || (e.name && e.name !== 'word')) return;
+      player.gotBoundary = true;
+      clearTimeout(player.estTimer);
+      highlight(offset + e.charIndex);
+    };
+    u.onstart = () => { if (token === player.token) estimateWords(token, full, offset); };
+    u.onend = () => { if (token === player.token) nextVerse(); };
+    u.onerror = (e) => {
+      if (token !== player.token || e.error === 'interrupted' || e.error === 'canceled') return;
+      pausePlayer();
+      toast('Could not play audio on this device.');
+    };
+    // A short pause after cancel() avoids a Chrome bug where the next utterance is dropped.
+    setTimeout(() => { if (token === player.token) synth.speak(u); }, 60);
+  }
+  // Some voices don't report word positions; step through the words at speaking pace instead.
+  function estimateWords(token, full, offset) {
+    const perChar = 1000 / (14.5 * state.settings.rate);
+    const words = [...full.slice(offset).matchAll(/\S+/g)];
+    let i = 0;
+    const step = () => {
+      if (token !== player.token || player.gotBoundary || i >= words.length) return;
+      highlight(offset + words[i].index);
+      const len = words[i].index + words[i][0].length;
+      i++;
+      const next = i < words.length ? words[i].index : len;
+      player.estTimer = setTimeout(step, Math.max(120, (next - (words[i - 1].index)) * perChar));
+    };
+    player.estTimer = setTimeout(() => { if (!player.gotBoundary) step(); }, 450);
+  }
+  function nextVerse() {
+    const p = player.pos;
+    if (p.v < BIBLE[p.b][1][p.c - 1].length) return speakFrom({ b: p.b, c: p.c, v: p.v + 1 }, 0);
+    const n = nextChapter(p.b, p.c);
+    if (n) speakFrom({ b: n[0], c: n[1], v: 1 }, 0);
+    else stopPlayer();
+  }
+  function prevVerse() {
+    const p = player.pos;
+    if (p.v > 1) return speakFrom({ b: p.b, c: p.c, v: p.v - 1 }, 0);
+    const n = prevChapter(p.b, p.c);
+    if (n) speakFrom({ b: n[0], c: n[1], v: BIBLE[n[0]][1][n[1] - 1].length }, 0);
+    else speakFrom(p, 0);
+  }
+  function pausePlayer() {
+    player.token++;
+    player.playing = false;
+    clearTimeout(player.estTimer);
+    synth.cancel();
+    releaseWake();
+    renderPlayer();
+  }
+  function resumePlayer() {
+    requestWake();
+    speakFrom(player.pos, player.word);
+  }
+  function startPlayer() {
+    if (!synth) return toast('Read aloud is not supported on this device.');
+    player.active = true;
+    document.body.classList.add('playing');
+    $('#player').hidden = false;
+    if (state.settings.mode === 'page') relayout();
+    requestWake();
+    speakFrom({ ...state.ribbon }, 0);
+  }
+  function stopPlayer() {
+    pausePlayer();
+    clearHighlight();
+    player.active = false;
+    document.body.classList.remove('playing');
+    $('#player').hidden = true;
+    if (state.settings.mode === 'page') relayout();
+  }
+  // The reader jumped somewhere (book list, bookmark, plan): keep reading from there.
+  function afterNavigate(b, c, v) {
+    if (player.internal) return;
+    const p = player.pos;
+    if (p && p.b === b && p.c === c && p.v === v) {
+      if (player.playing) highlight(player.word);   // same place, just re-drawn
+      return;
+    }
+    if (player.playing) speakFrom({ b, c, v }, 0);
+    else { player.pos = { b, c, v }; player.word = 0; clearHighlight(); renderPlayer(); }
+  }
+  function renderPlayer() {
+    if (!player.pos) return;
+    $('#player-ref').textContent = ref(player.pos);
+    const btn = $('#player-toggle');
+    btn.innerHTML = player.playing
+      ? '<svg viewBox="0 0 24 24"><rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg>';
+    btn.setAttribute('aria-label', player.playing ? 'Pause' : 'Play');
+    $('#player-rate').textContent = `${state.settings.rate}×`;
+  }
+  async function requestWake() {
+    try { if ('wakeLock' in navigator && !player.wakeLock) player.wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { /* ignore */ }
+  }
+  function releaseWake() {
+    if (player.wakeLock) { player.wakeLock.release().catch(() => {}); player.wakeLock = null; }
+  }
+  // Phones stop speech when the app goes to the background; pause so it resumes in place.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && player.playing) pausePlayer();
+  });
+
+  if (!synth) $('#btn-play').hidden = true;
+  $('#btn-play').addEventListener('click', () => {
+    if (!player.active) startPlayer();
+    else if (player.playing) pausePlayer();
+    else resumePlayer();
+  });
+  $('#player-toggle').addEventListener('click', () => (player.playing ? pausePlayer() : resumePlayer()));
+  $('#player-prev').addEventListener('click', () => { requestWake(); prevVerse(); });
+  $('#player-next').addEventListener('click', () => { requestWake(); nextVerse(); });
+  $('#player-close').addEventListener('click', stopPlayer);
+  $('#player-rate').addEventListener('click', () => {
+    const i = RATES.indexOf(state.settings.rate);
+    state.settings.rate = RATES[(i + 1) % RATES.length];
+    save();
+    renderPlayer();
+    if (player.playing) speakFrom(player.pos, player.word);
+  });
+
+  // Voice picker (Aa panel)
+  function fillVoices() {
+    const sel = $('#set-voice');
+    const vs = englishVoices();
+    const cur = currentVoice();
+    if (!vs.length) {
+      sel.innerHTML = '<option>Default voice</option>';
+      return;
+    }
+    sel.innerHTML = vs.map((v) => `<option value="${esc(v.voiceURI)}"${cur && v.voiceURI === cur.voiceURI ? ' selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+  }
+  if (synth) {
+    fillVoices();
+    synth.addEventListener && synth.addEventListener('voiceschanged', fillVoices);
+  }
+  $('#btn-set').addEventListener('click', fillVoices);
+  $('#set-voice').addEventListener('change', (e) => {
+    state.settings.voice = e.target.value;
+    save();
+    if (player.playing) speakFrom(player.pos, player.word);
+  });
+  $('#voice-test').addEventListener('click', () => {
+    if (!synth) return;
+    if (player.playing) pausePlayer();
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(spoken('The LORD is my shepherd; I shall not want.'));
+    const v = currentVoice();
+    if (v) { u.voice = v; u.lang = v.lang; }
+    u.rate = state.settings.rate;
+    u.pitch = 0.95;
+    synth.speak(u);
+  });
 
   // ---------- Startup ----------
   let resizeTimer = 0;
