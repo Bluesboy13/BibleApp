@@ -5,7 +5,8 @@ A simple, book-like King James Bible reader. Plain HTML/CSS/JS, installable on p
 - **Book layout:** serif type, paper-colored page, a large chapter number at the start of each chapter, and no verse numbers by default.
 - **Verse numbers:** tap **¹²³** in the top bar to show or hide them.
 - **Reading:** scrolls by default. Switch to **Pages** under **Aa** to turn pages like a Kindle (tap the edges or swipe).
-- **Read aloud:** tap the speaker icon. The device's built-in voice reads verse by verse, highlighting each word and keeping it on screen, with play/pause, previous/next verse and speed. Pick the voice under **Aa** (a British voice such as Arthur or Daniel is chosen by default when available).
+- **Read aloud:** tap the speaker icon. By default the app plays its own recording in "Daniel", a British voice (Kokoro `bm_daniel`, Apache-2.0), streamed chapter by chapter and able to keep playing with the screen locked. Chapters not yet recorded, or offline listening, use the device's own voices, which can also be chosen under **Aa → Voice**. Words are highlighted and kept on screen, with play/pause, previous/next verse and speed.
+  Recordings are made with `tools/audio/generate.py` and live in `audio/<book>/<chapter>.m4a` with verse timings in a matching `.json`.
 - **Ribbon:** remembers where you left off and reopens there. Tap the bookmark icon to save more spots.
 - **Reading plan:** Genesis to Revelation in 365 days (about 3–4 chapters a day), with days to check off.
 - **Themes:** Paper, White and Night, with adjustable text size and font.

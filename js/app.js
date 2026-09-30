@@ -608,9 +608,27 @@
   $('#planpill-x').addEventListener('click', hidePlanPill);
 
   // ---------- Read aloud ----------
-  // Uses the device's built-in voices (works offline). Reads verse by verse, highlights the
-  // word being spoken, and keeps it in view.
-  const synth = window.speechSynthesis;
+  // Two engines: recorded audio in the app's own "Daniel" voice (the default, streamed per
+  // chapter with verse timings), and the device's speech voices (offline, or chapters not yet
+  // recorded). Both read from the current place, highlight the words and keep them in view.
+  const synth = window.speechSynthesis || null;
+  const BUILTIN = 'builtin:daniel';
+  const AUDIO_BASE = 'audio/';   // <book 01-66>/<chapter 001>.m4a + .json (verse start/end times)
+  const AUDIO_SPEED = 0.9;       // speed the recordings were made at (plays at rate / this)
+  const useBuiltin = () => !state.settings.voice || state.settings.voice === BUILTIN;
+  const audio = new Audio();
+  audio.preload = 'auto';
+  const timings = new Map();     // 'b:c' -> timing object, or null when not recorded / unreachable
+  const pad = (n, w) => String(n).padStart(w, '0');
+  const audioPath = (b, c) => `${AUDIO_BASE}${pad(b + 1, 2)}/${pad(c, 3)}`;
+  function loadTiming(b, c) {
+    const key = `${b}:${c}`;
+    if (timings.has(key)) return Promise.resolve(timings.get(key));
+    return fetch(audioPath(b, c) + '.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then((t) => { timings.set(key, t && t.s ? t : null); return timings.get(key); });
+  }
   const player = {
     active: false,     // player bar is open
     playing: false,
@@ -702,7 +720,7 @@
 
   function speakFrom(pos, offset) {
     const token = ++player.token;
-    synth.cancel();
+    if (synth) synth.cancel();
     clearInterval(player.estTimer);
     player.pos = pos;
     player.word = offset;
@@ -721,6 +739,125 @@
     clearHighlight();
     highlight(offset);
 
+    if (useBuiltin()) {
+      const key = `${pos.b}:${pos.c}`;
+      if (timings.has(key)) {
+        if (timings.get(key)) return playAudio(token, pos, offset, timings.get(key));
+      } else {
+        // Start the audio element now, inside the tap, so phones allow playback once the timing arrives.
+        primeAudio(pos);
+        loadTiming(pos.b, pos.c).then((t) => {
+          if (token !== player.token) return;
+          if (t) playAudio(token, pos, offset, t);
+          else speakDevice(token, pos, offset, true);
+        });
+        return;
+      }
+      return speakDevice(token, pos, offset, true);
+    }
+    speakDevice(token, pos, offset, false);
+  }
+
+  // ----- Recorded "Daniel" audio -----
+  function primeAudio(pos) {
+    const url = new URL(audioPath(pos.b, pos.c) + '.m4a', location.href).href;
+    if (audio.src !== url) audio.src = url;
+    audio.muted = true;
+    audio.play().catch(() => {});
+  }
+  // Word timing inside a verse: share the verse's recorded time by word length and pauses.
+  function wordShares(text) {
+    const words = [...text.matchAll(/\S+/g)];
+    const w = words.map((m) => m[0].length + 1 + (/[.?!]["’)]*$/.test(m[0]) ? 8 : /[,;:]["’)]*$/.test(m[0]) ? 4 : 0));
+    const total = w.reduce((a, x) => a + x, 0) || 1;
+    let acc = 0;
+    return words.map((m, i) => { const at = acc / total; acc += w[i]; return { i: m.index, at }; });
+  }
+  function timeFor(t, pos, offset) {
+    const s = t.s[pos.v - 1], e = t.e[pos.v - 1];
+    if (pos.v === 1 && offset === 0) return 0;   // include the "Psalm 23." / "John, chapter 3." heading
+    if (!offset) return s;
+    const shares = wordShares(verseText(pos.b, pos.c, pos.v));
+    const w = shares.find((x) => x.i >= offset) || shares[shares.length - 1];
+    return s + (e - s) * w.at;
+  }
+  function playAudio(token, pos, offset, t) {
+    player.engine = 'audio';
+    player.timing = t;
+    player.chapter = { b: pos.b, c: pos.c };
+    const url = new URL(audioPath(pos.b, pos.c) + '.m4a', location.href).href;
+    if (audio.src !== url) audio.src = url;
+    audio.playbackRate = state.settings.rate / AUDIO_SPEED;
+    const at = timeFor(t, pos, offset);
+    const go = () => {
+      if (token !== player.token) return;
+      try { audio.currentTime = at; } catch (e) { /* not seekable yet */ }
+      audio.muted = false;
+      audio.play().catch(() => { if (token === player.token) { pausePlayer(); toast('Tap play to start.'); } });
+    };
+    if (audio.readyState >= 1) go(); else audio.addEventListener('loadedmetadata', go, { once: true });
+    setMediaSession();
+    clearInterval(player.estTimer);
+    player.estTimer = setInterval(() => audioTick(token), 80);
+    // Fetch the next chapter's timing ahead so moving on is instant.
+    const n = nextChapter(pos.b, pos.c);
+    if (n) loadTiming(n[0], n[1]);
+  }
+  function audioTick(token) {
+    if (token !== player.token || audio.paused || audio.seeking) return;
+    const t = player.timing, ct = audio.currentTime;
+    let i = 0;
+    while (i + 1 < t.s.length && t.s[i + 1] <= ct + 0.02) i++;
+    const v = i + 1;
+    if (v !== player.pos.v) {
+      player.pos = { b: player.chapter.b, c: player.chapter.c, v };
+      setRibbon(player.pos);
+      renderPlayer();
+      setMediaSession();
+      clearHighlight();
+    }
+    if (ct < t.s[i]) return highlight(0);   // chapter heading is being read
+    const frac = (ct - t.s[i]) / Math.max(0.1, t.e[i] - t.s[i]);
+    const shares = wordShares(verseText(player.pos.b, player.pos.c, v));
+    let w = shares[0];
+    for (const x of shares) { if (x.at <= frac) w = x; else break; }
+    if (w) highlight(w.i);
+  }
+  audio.addEventListener('ended', () => {
+    if (player.engine !== 'audio' || !player.playing) return;
+    const n = nextChapter(player.chapter.b, player.chapter.c);
+    if (n) speakFrom({ b: n[0], c: n[1], v: 1 }, 0); else stopPlayer();
+  });
+  audio.addEventListener('error', () => {
+    // Couldn't load this chapter's recording (e.g. offline): carry on with the device voice.
+    if (player.engine !== 'audio' || !player.playing || !player.chapter) return;
+    timings.set(`${player.chapter.b}:${player.chapter.c}`, null);
+    speakFrom(player.pos, player.word);
+  });
+  function setMediaSession() {
+    if (!('mediaSession' in navigator) || !player.pos) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: ref(player.pos), artist: 'King James Bible', album: bookName(player.pos.b) });
+    } catch (e) { /* ignore */ }
+  }
+  if ('mediaSession' in navigator) {
+    const on = (a, f) => { try { navigator.mediaSession.setActionHandler(a, f); } catch (e) { /* unsupported */ } };
+    on('play', () => player.active && resumePlayer());
+    on('pause', () => player.active && pausePlayer());
+    on('previoustrack', () => player.active && prevVerse());
+    on('nexttrack', () => player.active && nextVerse());
+  }
+
+  // ----- Device speech voices -----
+  let fallbackNoted = false;
+  function speakDevice(token, pos, offset, fellBack) {
+    player.engine = 'device';
+    audio.pause();
+    if (!synth) { pausePlayer(); return toast('This chapter needs an internet connection to be read aloud.'); }
+    if (fellBack && !fallbackNoted) {
+      fallbackNoted = true;
+      toast('Daniel isn’t available here yet (or you’re offline). Using the device voice.');
+    }
     const full = spoken(verseText(pos.b, pos.c, pos.v));
     const u = new SpeechSynthesisUtterance(full.slice(offset));
     const voice = currentVoice();
@@ -820,7 +957,8 @@
     player.token++;
     player.playing = false;
     clearInterval(player.estTimer);
-    synth.cancel();
+    if (synth) synth.cancel();
+    audio.pause();
     releaseWake();
     renderPlayer();
   }
@@ -829,7 +967,7 @@
     speakFrom(player.pos, player.word);
   }
   function startPlayer() {
-    if (!synth) return toast('Read aloud is not supported on this device.');
+    if (!synth && !useBuiltin()) return toast('Read aloud is not supported on this device.');
     player.active = true;
     document.body.classList.add('playing');
     $('#player').hidden = false;
@@ -874,10 +1012,9 @@
   }
   // Phones stop speech when the app goes to the background; pause so it resumes in place.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && player.playing) pausePlayer();
+    if (document.visibilityState === 'hidden' && player.playing && player.engine === 'device') pausePlayer();
   });
 
-  if (!synth) $('#btn-play').hidden = true;
   $('#btn-play').addEventListener('click', () => {
     if (!player.active) startPlayer();
     else if (player.playing) pausePlayer();
@@ -899,12 +1036,9 @@
   function fillVoices() {
     const sel = $('#set-voice');
     const vs = englishVoices();
-    const cur = currentVoice();
-    if (!vs.length) {
-      sel.innerHTML = '<option>Default voice</option>';
-      return;
-    }
-    sel.innerHTML = vs.map((v) => `<option value="${esc(v.voiceURI)}"${cur && v.voiceURI === cur.voiceURI ? ' selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+    const cur = useBuiltin() ? null : currentVoice();
+    sel.innerHTML = `<option value="${BUILTIN}"${useBuiltin() ? ' selected' : ''}>Daniel – British (built in)</option>` +
+      (vs.length ? '<optgroup label="This device’s voices">' + vs.map((v) => `<option value="${esc(v.voiceURI)}"${cur && v.voiceURI === cur.voiceURI ? ' selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('') + '</optgroup>' : '');
   }
   if (synth) {
     fillVoices();
@@ -923,8 +1057,23 @@
     if (player.playing) speakFrom(player.pos, player.word);
   });
   $('#voice-test').addEventListener('click', () => {
-    if (!synth) return;
     if (player.playing) pausePlayer();
+    if (useBuiltin()) {
+      // Play the first verse of Psalm 23 from the recording.
+      primeAudio({ b: 18, c: 23 });
+      loadTiming(18, 23).then((t) => {
+        if (!t) { audio.pause(); return toast('Daniel needs an internet connection.'); }
+        audio.currentTime = t.s[0];
+        audio.playbackRate = state.settings.rate / AUDIO_SPEED;
+        audio.muted = false;
+        audio.play().catch(() => {});
+        const stopAt = t.e[0];
+        const stop = () => { if (audio.currentTime >= stopAt) { audio.pause(); audio.removeEventListener('timeupdate', stop); } };
+        audio.addEventListener('timeupdate', stop);
+      });
+      return;
+    }
+    if (!synth) return;
     synth.cancel();
     const u = new SpeechSynthesisUtterance(spoken('The LORD is my shepherd; I shall not want.'));
     const v = currentVoice();

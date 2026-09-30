@@ -1,6 +1,6 @@
 // Offline support: cache the app and the Bible text on first visit.
 // Bump CACHE whenever files change so phones pick up a complete, matching set.
-const CACHE = 'kjv-v8';
+const CACHE = 'kjv-v9';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/sync.js', 'js/firebase-config.js',
   'vendor/firebase.js', 'data/kjv.json', 'manifest.webmanifest',
@@ -35,6 +35,8 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
   if (url.origin !== self.location.origin && !isFont(url)) return;
+  // Recorded audio streams straight from the server (media needs range requests).
+  if (url.pathname.includes('/audio/')) return;
   e.respondWith(isAppCode(url) ? networkFirst(e.request) : cacheFirst(e.request));
 });
 
