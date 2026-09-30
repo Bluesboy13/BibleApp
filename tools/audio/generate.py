@@ -6,6 +6,7 @@ For each chapter writes:
 
 Usage: python generate.py --out audio --only 19:23 43:3   (book:chapter, 1-based)
        python generate.py --out audio --books 1-66          (everything)
+       python generate.py --out audio --books 1-66 --shard 3/20   (one of 20 equal slices, for parallel runs)
 Needs kokoro-v1.0.onnx and voices-v1.0.bin (downloaded automatically) and ffmpeg.
 """
 import argparse
@@ -22,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TEXT = os.path.join(HERE, "..", "..", "data", "kjv.json")
 MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 VOICE, SPEED, SR = "bm_daniel", 0.9, 24000
+BITRATE = "24k"   # keeps the whole Bible (~70 h) under GitHub Pages' 1 GB site limit
 GAP, PARA_GAP, INTRO_GAP = 0.3, 0.55, 0.6
 
 
@@ -82,7 +84,7 @@ def chapter(k, bible, b, c, out):
     base = os.path.join(d, f"{c:03d}")
     pcm = (audio * 32767).astype("<i2").tobytes()
     subprocess.run([ffmpeg(), "-y", "-loglevel", "error", "-f", "s16le", "-ar", str(SR), "-ac", "1", "-i", "-",
-                    "-c:a", "aac", "-b:a", "32k", "-movflags", "+faststart", base + ".m4a"], input=pcm, check=True)
+                    "-c:a", "aac", "-b:a", BITRATE, "-movflags", "+faststart", base + ".m4a"], input=pcm, check=True)
     with open(base + ".json", "w") as f:
         json.dump({"s": starts, "e": ends, "d": round(len(audio) / SR, 3)}, f, separators=(",", ":"))
     return len(audio) / SR
@@ -94,15 +96,29 @@ def main():
     ap.add_argument("--models", default=os.path.join(HERE, ".models"))
     ap.add_argument("--only", nargs="*", default=[], help="book:chapter pairs")
     ap.add_argument("--books", default="", help="range like 1-66 or 40-43")
+    ap.add_argument("--skip-in", default="", help="also skip chapters already recorded in this folder")
+    ap.add_argument("--shard", default="", help="i/n: record only slice i (1-based) of n, balanced by text length")
     args = ap.parse_args()
     bible = json.load(open(TEXT, encoding="utf-8"))
     jobs = [tuple(map(int, x.split(":"))) for x in args.only]
     if args.books:
         lo, hi = (map(int, args.books.split("-")) if "-" in args.books else (int(args.books),) * 2)
         jobs += [(b, c) for b in range(lo, hi + 1) for c in range(1, len(bible[b - 1][1]) + 1)]
+    if args.shard:
+        i, n = map(int, args.shard.split("/"))
+        load = [0] * n
+        mine = []
+        # Longest chapters first onto the least-loaded slice gives slices of similar length.
+        for b, c in sorted(jobs, key=lambda j: -sum(len(v) for v in bible[j[0] - 1][1][j[1] - 1])):
+            k_ = load.index(min(load))
+            load[k_] += sum(len(v) for v in bible[b - 1][1][c - 1])
+            if k_ == i - 1:
+                mine.append((b, c))
+        jobs = sorted(mine)
     k = load_kokoro(args.models)
     for b, c in jobs:
-        if os.path.exists(os.path.join(args.out, f"{b:02d}", f"{c:03d}.json")):
+        done = [os.path.join(d, f"{b:02d}", f"{c:03d}.json") for d in (args.out, args.skip_in) if d]
+        if any(os.path.exists(f) for f in done):
             continue   # already recorded: lets an interrupted run pick up where it stopped
         secs = chapter(k, bible, b, c, args.out)
         print(f"{bible[b - 1][0]} {c}: {secs:.0f}s", flush=True)
