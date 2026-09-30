@@ -613,21 +613,32 @@
   // recorded). Both read from the current place, highlight the words and keep them in view.
   const synth = window.speechSynthesis || null;
   const BUILTIN = 'builtin:daniel';
-  const AUDIO_BASE = 'audio/';   // <book 01-66>/<chapter 001>.m4a + .json (verse start/end times)
+  // Where recordings live: <book 01-66>/<chapter 001>.m4a + .json (verse start/end times).
+  // The full Bible is in the BibleApp-audio repo's GitHub Pages site; a few chapters also ship here.
+  const AUDIO_BASES = ['https://bluesboy13.github.io/BibleApp-audio/', 'audio/'];
   const AUDIO_SPEED = 0.9;       // speed the recordings were made at (plays at rate / this)
   const useBuiltin = () => !state.settings.voice || state.settings.voice === BUILTIN;
   const audio = new Audio();
   audio.preload = 'auto';
   const timings = new Map();     // 'b:c' -> timing object, or null when not recorded / unreachable
   const pad = (n, w) => String(n).padStart(w, '0');
-  const audioPath = (b, c) => `${AUDIO_BASE}${pad(b + 1, 2)}/${pad(c, 3)}`;
+  const chapterPath = (b, c) => `${pad(b + 1, 2)}/${pad(c, 3)}`;
+  // URL of a chapter's recording, from whichever place its timing file was found.
+  const audioUrl = (b, c) => {
+    const t = timings.get(`${b}:${c}`);
+    return new URL((t ? t.base : AUDIO_BASES[0]) + chapterPath(b, c) + '.m4a', location.href).href;
+  };
   function loadTiming(b, c) {
     const key = `${b}:${c}`;
     if (timings.has(key)) return Promise.resolve(timings.get(key));
-    return fetch(audioPath(b, c) + '.json')
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null)
-      .then((t) => { timings.set(key, t && t.s ? t : null); return timings.get(key); });
+    const tryBase = (i) => {
+      if (i >= AUDIO_BASES.length) return Promise.resolve(null);
+      return fetch(AUDIO_BASES[i] + chapterPath(b, c) + '.json')
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+        .then((t) => (t && t.s ? Object.assign(t, { base: AUDIO_BASES[i] }) : tryBase(i + 1)));
+    };
+    return tryBase(0).then((t) => { timings.set(key, t); return t; });
   }
   const player = {
     active: false,     // player bar is open
@@ -760,7 +771,7 @@
 
   // ----- Recorded "Daniel" audio -----
   function primeAudio(pos) {
-    const url = new URL(audioPath(pos.b, pos.c) + '.m4a', location.href).href;
+    const url = audioUrl(pos.b, pos.c);
     if (audio.src !== url) audio.src = url;
     audio.muted = true;
     audio.play().catch(() => {});
@@ -785,7 +796,7 @@
     player.engine = 'audio';
     player.timing = t;
     player.chapter = { b: pos.b, c: pos.c };
-    const url = new URL(audioPath(pos.b, pos.c) + '.m4a', location.href).href;
+    const url = audioUrl(pos.b, pos.c);
     if (audio.src !== url) audio.src = url;
     audio.playbackRate = state.settings.rate / AUDIO_SPEED;
     const at = timeFor(t, pos, offset);
@@ -831,6 +842,7 @@
   audio.addEventListener('error', () => {
     // Couldn't load this chapter's recording (e.g. offline): carry on with the device voice.
     if (player.engine !== 'audio' || !player.playing || !player.chapter) return;
+    if (audio.src !== audioUrl(player.chapter.b, player.chapter.c)) return;   // an old or pre-loaded file, not the one playing
     timings.set(`${player.chapter.b}:${player.chapter.c}`, null);
     speakFrom(player.pos, player.word);
   });

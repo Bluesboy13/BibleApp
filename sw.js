@@ -1,6 +1,6 @@
 // Offline support: cache the app and the Bible text on first visit.
 // Bump CACHE whenever files change so phones pick up a complete, matching set.
-const CACHE = 'kjv-v9';
+const CACHE = 'kjv-v10';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/sync.js', 'js/firebase-config.js',
   'vendor/firebase.js', 'data/kjv.json', 'manifest.webmanifest',
