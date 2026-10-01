@@ -42,6 +42,6 @@ Then open http://localhost:8000.
 - **Septuagint, English** — Sir Lancelot C. L. Brenton's translation (1844/1851), from eBible.org (`eng-Brenton`), public domain.
 - **Hebrew Old Testament** — Westminster Leningrad Codex (public domain), vowel points kept and cantillation marks removed for easier reading. Hebrew ↔ KJV verse numbering from STEPBible's TVTMS table ([STEPBible.org](https://www.stepbible.org), CC BY 4.0).
 - **KJV Apocrypha** — from the 1769 KJV, public domain (shown under the Septuagint's extra books).
-- **Greek New Testament** — Scrivener's 1894 Textus Receptus (accented), public domain.
+- **Greek New Testament** — Scrivener's 1894 Textus Receptus (accented), public domain; about 4,500 short words missing from that file (mostly ὁ and ἡ) restored from Dr. Maurice Robinson's Scrivener 1894 text, with accents from the Robinson-Pierpont Byzantine text (both public domain, [byztxt](https://github.com/byztxt)) — see `tools/texts/repair_tr.py`.
 - The LXX ↔ KJV verse matching was made for this app by comparing the words of Brenton's English with the KJV (`tools/texts/build_texts.py`).
-- **Audio** — "Daniel", Kokoro TTS voice `bm_daniel` (Apache-2.0).
+- **Audio** — "Daniel", Kokoro TTS voice `bm_daniel` (Apache-2.0). Greek read in modern Greek pronunciation by Chatterbox Multilingual's built-in voice (MIT, Resemble AI) — see `tools/greek/generate.py`.

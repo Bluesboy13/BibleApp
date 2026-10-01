@@ -962,26 +962,40 @@
   // The full Bible is in the BibleApp-audio repo's GitHub Pages site; a few chapters also ship here.
   const AUDIO_BASES = ['https://bluesboy13.github.io/BibleApp-audio/', 'audio/'];
   const AUDIO_SPEED = 0.9;       // speed the recordings were made at (plays at rate / this)
+  // The Greek texts (Septuagint and Greek NT) have their own recording in a natural modern-Greek
+  // voice, in the same layout (books 67-80 are the extra Septuagint books).
+  const RECORDINGS = {
+    kjv: { bases: AUDIO_BASES, speed: AUDIO_SPEED },
+    el: { bases: ['https://bluesboy13.github.io/BibleApp-audio-greek/'], speed: 1 },
+  };
+  // Which recording reads this book, if any: Daniel for the KJV (when he's the chosen voice),
+  // the Greek voice for Greek text whatever English voice is chosen.
+  const recordingFor = (b) => (SRC[b] === 'kjv' ? (useBuiltin() ? 'kjv' : null) : langOf(b) === 'el' ? 'el' : null);
   const useBuiltin = () => !state.settings.voice || state.settings.voice === BUILTIN;
   const audio = new Audio();
   audio.preload = 'auto';
-  const timings = new Map();     // 'b:c' -> timing object, or null when not recorded / unreachable
+  const timings = new Map();     // 'set:b:c' -> timing object, or null when not recorded / unreachable
   const pad = (n, w) => String(n).padStart(w, '0');
   const chapterPath = (b, c) => `${pad(b + 1, 2)}/${pad(c, 3)}`;
   // URL of a chapter's recording, from whichever place its timing file was found.
+  const timingKey = (b, c, set = recordingFor(b)) => `${set}:${b}:${c}`;
   const audioUrl = (b, c) => {
-    const t = timings.get(`${b}:${c}`);
-    return new URL((t ? t.base : AUDIO_BASES[0]) + chapterPath(b, c) + '.m4a', location.href).href;
+    const set = recordingFor(b) || 'kjv';
+    const t = timings.get(timingKey(b, c, set));
+    return new URL((t ? t.base : RECORDINGS[set].bases[0]) + chapterPath(b, c) + '.m4a', location.href).href;
   };
   function loadTiming(b, c) {
-    const key = `${b}:${c}`;
+    const set = recordingFor(b);
+    const key = timingKey(b, c, set);
+    if (!set) return Promise.resolve(null);
     if (timings.has(key)) return Promise.resolve(timings.get(key));
+    const bases = RECORDINGS[set].bases;
     const tryBase = (i) => {
-      if (i >= AUDIO_BASES.length) return Promise.resolve(null);
-      return fetch(AUDIO_BASES[i] + chapterPath(b, c) + '.json')
+      if (i >= bases.length) return Promise.resolve(null);
+      return fetch(bases[i] + chapterPath(b, c) + '.json')
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null)
-        .then((t) => (t && t.s ? Object.assign(t, { base: AUDIO_BASES[i] }) : tryBase(i + 1)));
+        .then((t) => (t && t.s ? Object.assign(t, { base: bases[i], speed: RECORDINGS[set].speed }) : tryBase(i + 1)));
     };
     return tryBase(0).then((t) => { timings.set(key, t); return t; });
   }
@@ -1096,8 +1110,8 @@
     clearHighlight();
     highlight(offset);
 
-    if (useBuiltin() && SRC[pos.b] === 'kjv') {   // Daniel's recording is of the KJV
-      const key = `${pos.b}:${pos.c}`;
+    if (recordingFor(pos.b)) {   // Daniel's KJV, or the Greek recording
+      const key = timingKey(pos.b, pos.c);
       if (timings.has(key)) {
         if (timings.get(key)) return playAudio(token, pos, offset, timings.get(key));
       } else {
@@ -1144,7 +1158,7 @@
     player.chapter = { b: pos.b, c: pos.c };
     const url = audioUrl(pos.b, pos.c);
     if (audio.src !== url) audio.src = url;
-    audio.playbackRate = state.settings.rate / AUDIO_SPEED;
+    audio.playbackRate = state.settings.rate / (t.speed || AUDIO_SPEED);
     const at = timeFor(t, pos, offset);
     const go = () => {
       if (token !== player.token) return;
@@ -1189,7 +1203,7 @@
     // Couldn't load this chapter's recording (e.g. offline): carry on with the device voice.
     if (player.engine !== 'audio' || !player.playing || !player.chapter) return;
     if (audio.src !== audioUrl(player.chapter.b, player.chapter.c)) return;   // an old or pre-loaded file, not the one playing
-    timings.set(`${player.chapter.b}:${player.chapter.c}`, null);
+    timings.set(timingKey(player.chapter.b, player.chapter.c), null);
     speakFrom(player.pos, player.word);
   });
   function setMediaSession() {
@@ -1214,7 +1228,7 @@
     if (!synth) { pausePlayer(); return toast('This chapter needs an internet connection to be read aloud.'); }
     if (fellBack && !fallbackNoted) {
       fallbackNoted = true;
-      toast('Daniel isn’t available here yet (or you’re offline). Using the device voice.');
+      toast(`${langOf(pos.b) === 'el' ? 'The Greek recording' : 'Daniel'} isn’t available here yet (or you’re offline). Using the device voice.`);
     }
     const full = spoken(verseText(pos.b, pos.c, pos.v));
     const u = new SpeechSynthesisUtterance(full.slice(offset));
