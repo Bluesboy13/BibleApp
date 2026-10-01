@@ -16,9 +16,11 @@
   // Alternative texts. Old Testament books come from the text's file; New Testament books from `nt`.
   const TEXTS = {
     kjv: { name: 'KJV', short: '' },
-    'lxx-gr': { name: 'Septuagint (Greek)', short: 'LXX', file: 'data/lxx-gr.json', nt: 'data/tr.json', lang: 'el' },
-    'lxx-en': { name: 'Septuagint (Brenton English)', short: 'LXX', file: 'data/lxx-en.json', lang: 'en' },
+    'lxx-gr': { name: 'Septuagint (Greek)', short: 'LXX', file: 'data/lxx-gr.json', nt: 'data/tr.json', apoc: 'data/kjv-apocrypha.json', lang: 'el' },
+    'lxx-en': { name: 'Septuagint (Brenton English)', short: 'LXX', file: 'data/lxx-en.json', apoc: 'data/kjv-apocrypha.json', lang: 'en' },
+    wlc: { name: 'Hebrew (Westminster Leningrad Codex)', short: 'Hebrew', file: 'data/wlc.json', nt: 'data/tr.json', lang: 'he' },
   };
+  let APOC = null;           // the KJV's Apocrypha, for "KJV underneath" in the Septuagint's extra books
   const loadedTexts = {};    // file -> parsed JSON
   // Per book, for the text on screen: where it came from, printed chapter/verse labels, and its
   // map to KJV verses (null = same numbering as the KJV).
@@ -69,13 +71,17 @@
   const bookName = (b) => BIBLE[b][0];
   const chapterCount = (b) => BIBLE[b][1].length;
   const verseText = (b, c, v) => ((BIBLE[b][1][c - 1] || [])[v - 1] || '').replace('¶', '');
-  const kjvText = (b, c, v) => ((KJV[b][1][c - 1] || [])[v - 1] || '').replace('¶', '');
+  const kjvText = (b, c, v) => {
+    const book = b >= 66 ? (APOC && APOC.books[b]) : KJV[b][1];
+    return ((book && book[c - 1]) || [])[v - 1] ? book[c - 1][v - 1].replace('¶', '') : '';
+  };
   // Printed chapter and verse numbers (the LXX sometimes skips numbers or adds lettered verses).
   const chLabel = (b, c) => (CHLABELS[b] ? CHLABELS[b][c - 1] : String(c));
   const vLabel = (b, c, v) => (VLABELS[b] && VLABELS[b][c] ? VLABELS[b][c][v - 1] : String(v));
   const ref = (p) => `${bookName(p.b)} ${chLabel(p.b, p.c)}:${vLabel(p.b, p.c, p.v)}`;
   const kjvRef = (p) => `${KJV[p.b][0]} ${p.c}:${p.v}`;
-  const isGreek = (b) => SRC[b] === 'lxx-gr' || SRC[b] === 'tr';
+  // Language of a book in the text on screen: Hebrew, Greek or English.
+  const langOf = (b) => (SRC[b] === 'wlc' ? 'he' : SRC[b] === 'lxx-gr' || SRC[b] === 'tr' ? 'el' : 'en');
 
   // ----- Moving between a text's numbering and the KJV's -----
   const isExtra = (b) => b >= 66;
@@ -160,7 +166,7 @@
         SRC[b] = id;
         CHLABELS[b] = (ot.chapters || {})[b] || null;
         VLABELS[b] = (ot.labels || {})[b] || null;
-        MAP[b] = null;
+        MAP[b] = (ot.map || {})[b] || null;   // to the KJV Apocrypha, where the KJV has the book
         REVERSE[b] = null;
       });
     }
@@ -168,9 +174,10 @@
   }
   async function loadText(id) {
     const t = TEXTS[id] || TEXTS.kjv;
-    for (const f of [t.file, t.nt].filter(Boolean)) {
+    for (const f of [t.file, t.nt, t.apoc].filter(Boolean)) {
       if (!loadedTexts[f]) loadedTexts[f] = await (await fetch(f)).json();
     }
+    if (t.apoc) APOC = loadedTexts[t.apoc];
   }
   const esc = (s) => s.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
 
@@ -193,8 +200,9 @@
   function chapterHTML(b, c) {
     const verses = BIBLE[b][1][c - 1];
     const poetry = isPoetry(b, c);
-    const under = state.settings.under && SRC[b] !== 'kjv' && !isExtra(b);
-    let h = `<section class="chapter${poetry ? ' poetry' : ''}${under ? ' with-under' : ''}" data-c="${c}">`;
+    const under = state.settings.under && SRC[b] !== 'kjv' && (!isExtra(b) || (MAP[b] && APOC));
+    const lang = langOf(b);
+    let h = `<section class="chapter${poetry ? ' poetry' : ''}${under ? ' with-under' : ''}" data-c="${c}" lang="${lang}"${lang === 'he' ? ' dir="rtl"' : ''}>`;
     h += `<p><span class="dropcap">${esc(chLabel(b, c))}</span>`;
     verses.forEach((t, i) => {
       // ¶ marks a paragraph break in the text; start a new paragraph there in prose.
@@ -211,9 +219,14 @@
   // The matching KJV verse(s) under a verse of another text.
   function kjvUnderHTML(b, c, v) {
     const refs = MAP[b] ? ((MAP[b][c - 1] || [])[v - 1] || []) : [[c, v]];
-    if (!refs.length) return '<span class="kjv-under none" lang="en">— not in the KJV —</span>';
-    return '<span class="kjv-under" lang="en">' + refs.map(([kc, kv]) =>
-      `<span class="kref">${MAP[b] ? `${kc}:${kv}` : ''}</span>${esc(kjvText(b, kc, kv))}`).join(' ') + '</span>';
+    if (!refs.length) {
+      const what = b === 18 && SRC[b] === 'wlc' ? 'psalm heading (unnumbered in the KJV)' : 'not in the KJV';
+      return `<span class="kjv-under none" lang="en" dir="ltr">— ${what} —</span>`;
+    }
+    // The KJV prints the Letter of Jeremiah as Baruch chapter 6.
+    const chap = (kc) => (b === 77 ? 'Baruch 6' : kc);
+    return '<span class="kjv-under" lang="en" dir="ltr">' + refs.map(([kc, kv]) =>
+      `<span class="kref">${MAP[b] ? `${chap(kc)}:${kv}` : ''}</span>${esc(kjvText(b, kc, kv))}`).join(' ') + '</span>';
   }
   function bookNavHTML(b) {
     const prev = b > 0 ? `<button data-book="${b - 1}">‹ ${esc(bookName(b - 1))}</button>` : '<span></span>';
@@ -412,7 +425,7 @@
   function updateTitle() {
     const r = state.ribbon;
     const t = TEXTS[state.settings.text];
-    $('#title').textContent = `${bookName(r.b)} ${chLabel(r.b, r.c)}${t.short && SRC[r.b] !== 'kjv' ? (SRC[r.b] === 'tr' ? ' · TR' : ' · ' + t.short) : ''}`;
+    $('#title').textContent = `${bookName(r.b)} ${chLabel(r.b, r.c)}${t.short && SRC[r.b] !== 'kjv' ? (SRC[r.b] === 'tr' ? ' · Greek' : ' · ' + t.short) : ''}`;
   }
 
   function goTo(b, c, v, flash) {
@@ -455,9 +468,9 @@
     body.classList.toggle('hide-vn', !s.vn);
     body.classList.toggle('justify', s.align === 'justify');
     $('#row-under').hidden = s.text === 'kjv';
-    const lang = (TEXTS[s.text] || TEXTS.kjv).lang === 'el' ? 'el' : 'en';
-    bookEl.lang = lang;
-    flow.lang = lang;
+    // Each chapter carries its own language (and direction for Hebrew).
+    bookEl.lang = 'en';
+    flow.lang = 'en';
     body.classList.toggle('follow-verse', s.follow === 'verse');
     body.classList.toggle('mode-page', s.mode === 'page');
     pager.hidden = s.mode !== 'page';
@@ -1067,11 +1080,12 @@
     const full = spoken(verseText(pos.b, pos.c, pos.v));
     const u = new SpeechSynthesisUtterance(full.slice(offset));
     let voice = currentVoice();
-    if (isGreek(pos.b)) {
-      voice = synth.getVoices().find((v) => /^el/i.test(v.lang)) || null;
+    const lang = langOf(pos.b);
+    if (lang !== 'en') {
+      voice = synth.getVoices().find((v) => new RegExp('^' + (lang === 'he' ? '(he|iw)' : 'el'), 'i').test(v.lang)) || null;
       if (!voice) {
         pausePlayer();
-        return toast('No Greek voice on this device. Add one in your device settings, or switch to the English text.');
+        return toast(`No ${lang === 'he' ? 'Hebrew' : 'Greek'} voice on this device. Add one in your device settings, or switch to an English text.`);
       }
     }
     if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-GB';

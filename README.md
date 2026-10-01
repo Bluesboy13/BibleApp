@@ -9,7 +9,7 @@ A simple, book-like King James Bible reader. Plain HTML/CSS/JS, installable on p
   Recordings are made with `tools/audio/generate.py` and live in `audio/<book>/<chapter>.m4a` with verse timings in a matching `.json`.
 - **Ribbon:** remembers where you left off and reopens there. Tap the bookmark icon to save more spots.
 - **Reading plan:** Genesis to Revelation in 365 days (about 3–4 chapters a day), with days to check off.
-- **Septuagint (LXX):** under **Aa → Text**, switch to the Greek Old Testament (with the Textus Receptus for the New Testament) or Brenton's English translation of the Septuagint. The extra Septuagint books (1 Esdras, Tobit, Judith, 1–4 Maccabees, Wisdom, Sirach, Prayer of Manasseh, Baruch, Letter of Jeremiah, Susanna, Bel and the Dragon) appear at the bottom of the book list. Turn on **KJV underneath** to see the matching KJV verse(s) under each verse. Your place, bookmarks and reading plan carry across (they're kept in KJV numbering).
+- **Septuagint (LXX):** under **Aa → Text**, switch to the Greek Old Testament (with the Textus Receptus for the New Testament) or Brenton's English translation of the Septuagint. The extra Septuagint books (1 Esdras, Tobit, Judith, 1–4 Maccabees, Wisdom, Sirach, Prayer of Manasseh, Baruch, Letter of Jeremiah, Susanna, Bel and the Dragon) appear at the bottom of the book list. Or choose the **Hebrew** Old Testament (Westminster Leningrad Codex, read right to left, with the Greek Textus Receptus for the New Testament). Turn on **KJV underneath** to see the matching KJV verse(s) under each verse — in the extra Septuagint books it shows the KJV's own Apocrypha. Your place, bookmarks and reading plan carry across (they're kept in KJV numbering).
 - **Themes:** Paper, White and Night, with adjustable text size and font.
 
 Data is kept on the device (localStorage). Optionally, **Sign in with Google** (under **Aa**) syncs the ribbon, bookmarks and reading plan across devices through Firebase. Only Gmail addresses you approve can sync. The KJV text is public domain: the 1769 standard text, cross-checked verse by verse against three independent KJV copies. Paragraph breaks follow the KJV's own ¶ marks.
@@ -39,6 +39,8 @@ Then open http://localhost:8000.
 - **KJV** — 1769 text, public domain.
 - **Septuagint, Greek** — the Greek text printed with Brenton's Septuagint (1851), from eBible.org (`grcbrent`), public domain.
 - **Septuagint, English** — Sir Lancelot C. L. Brenton's translation (1844/1851), from eBible.org (`eng-Brenton`), public domain.
+- **Hebrew Old Testament** — Westminster Leningrad Codex (public domain), vowel points kept and cantillation marks removed for easier reading. Hebrew ↔ KJV verse numbering from STEPBible's TVTMS table ([STEPBible.org](https://www.stepbible.org), CC BY 4.0).
+- **KJV Apocrypha** — from the 1769 KJV, public domain (shown under the Septuagint's extra books).
 - **Greek New Testament** — Scrivener's 1894 Textus Receptus (accented), public domain.
 - The LXX ↔ KJV verse matching was made for this app by comparing the words of Brenton's English with the KJV (`tools/texts/build_texts.py`).
 - **Audio** — "Daniel", Kokoro TTS voice `bm_daniel` (Apache-2.0).

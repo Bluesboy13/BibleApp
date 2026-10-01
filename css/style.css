@@ -104,8 +104,8 @@ body.theme-night .dropcap { color: var(--text); }
 
 /* Poetry: one verse per line with a hanging indent */
 .poetry p { text-align: left; }
-.poetry .v { display: block; padding-left: 1.2em; text-indent: -1.2em; margin-bottom: .15em; }
-.poetry .v.first { padding-left: 0; text-indent: 0; }
+.poetry .v { display: block; padding-inline-start: 1.2em; text-indent: -1.2em; margin-bottom: .15em; }
+.poetry .v.first { padding-inline-start: 0; text-indent: 0; }
 
 .vn {
   font-size: .55em; vertical-align: .6em; line-height: 0;
@@ -300,4 +300,15 @@ body.follow-verse .v.reading { background: var(--flash); }
 }
 .kjv-under .kref { font-size: .85em; margin-right: .35em; font-variant-numeric: tabular-nums; }
 .kjv-under.none { font-style: italic; }
+#set-text { display: grid; grid-template-columns: 1fr 1fr; }
 #set-text button { padding: 8px 9px; }
+#set-text button + button { border-left: 0; }
+#set-text button:nth-child(even) { border-left: 1px solid var(--rule); }
+#set-text button:nth-child(n+3) { border-top: 1px solid var(--rule); }
+/* Hebrew: right to left, in a typeface made for pointed Hebrew */
+.chapter[lang="he"] { font-family: "Noto Serif Hebrew", var(--serif); font-size: 1.12em; line-height: 1.9; }
+.chapter[lang="he"] p { text-align: right; hyphens: manual; }
+.chapter[dir="rtl"] .dropcap { float: right; padding: .06em 0 0 .14em; font-family: var(--serif); }
+.chapter[dir="rtl"] .vn { margin: 0 .1em 0 .15em; }
+.chapter[lang="he"] .kjv-under { font-family: var(--serif); font-size: .66em; line-height: 1.45; text-align: left; }
+.chapter[lang="el"] p { hyphens: manual; }

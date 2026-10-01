@@ -1,12 +1,17 @@
 """Build the alternative texts used by the app's "Text" setting.
 
-Inputs (all public domain):
+Inputs (public domain unless noted):
   --brenton-en DIR   eBible.org eng-Brenton USFM files (Brenton's English Septuagint)
   --brenton-gr DIR   eBible.org grcbrent XeTeX *_src.tex files (the Greek printed with Brenton)
   --tr FILE          tr1894.txt, accented Scrivener 1894 Textus Receptus ("id@code@BOOK.c.v@text")
+  --kjva FILE        scrollmapper KJVA.json: the KJV (1769) with its Apocrypha
+  --wlc FILE         scrollmapper WLC.json: the Westminster Leningrad Codex (Hebrew Bible)
+  --tvtms FILE       STEPBible TVTMS versification table (CC BY 4.0) for Hebrew -> KJV numbering
 Writes into data/:
   lxx-en.json, lxx-gr.json   {"books": {kjvIndex: [[verse, ...] per chapter]}, "labels": {kjvIndex: {chapter: [label, ...]}}}
   tr.json                    same shape, New Testament only (KJV numbering)
+  wlc.json                   Hebrew OT in its own numbering, with "map" to KJV verses from STEPBible's table
+  kjv-apocrypha.json         the KJV's Apocrypha, arranged by the app's extra-book index (66+)
   lxx-map.json               {kjvIndex: [[ [[kjvChapter, kjvVerse], ...] per LXX verse ] per LXX chapter]}
 The map is made here by matching the words of Brenton's English against the KJV verse by verse,
 so "KJV under" can show the matching KJV verse(s) under each LXX verse.
@@ -157,6 +162,13 @@ def words(t):
     return [w for w in re.findall(r"[a-z]+", t.lower()) if w not in STOP and len(w) > 2]
 
 
+def _keys_extra(t, b):
+    """(chapter label, verse label) for each verse of a packed book."""
+    chl = t["chapters"].get(b) or [str(i + 1) for i in range(len(t["books"][b]))]
+    return [[(chl[ci], (t["labels"].get(b, {}).get(ci + 1) or [str(j + 1) for j in range(len(vs))])[vi])
+             for vi in range(len(vs))] for ci, vs in enumerate(t["books"][b])]
+
+
 def align(kjv_book, lxx_chapters):
     """For each KJV verse pick the Brenton verse that shares the most (rare) words, preferring nearby verses."""
     lxx = [(ci, vi, t) for ci, vs in enumerate(lxx_chapters) for vi, t in enumerate(vs)]
@@ -193,11 +205,109 @@ def align(kjv_book, lxx_chapters):
     return m, [float(S[k, l]) for k, l in enumerate(assign)]
 
 
+# KJV Apocrypha books (scrollmapper names) for the app's extra-book indices. 3 and 4 Maccabees aren't in it.
+KJVA_BOOKS = {66: ("I Esdras", None), 67: ("Tobit", None), 68: ("Judith", None), 69: ("I Maccabees", None),
+              70: ("II Maccabees", None), 73: ("Wisdom", None), 74: ("Sirach", None),
+              75: ("Prayer of Manasses", None), 76: ("Baruch", range(1, 6)), 77: ("Baruch", [6]),
+              78: ("Susanna", None), 79: ("Bel and the Dragon", None)}
+
+
+def kjv_apocrypha(path):
+    a = {b["name"]: b for b in json.load(open(path, encoding="utf-8"))["books"]}
+    out = {}
+    for idx, (name, chs) in KJVA_BOOKS.items():
+        chapters = a[name]["chapters"]
+        if chs:
+            chapters = [c for c in chapters if c["chapter"] in chs]
+        out[idx] = [[" ".join(v["text"].split()) for v in c["verses"]] for c in chapters]
+    return out
+
+
+TVTMS_BOOKS = ["Gen", "Exo", "Lev", "Num", "Deu", "Jos", "Jdg", "Rut", "1Sa", "2Sa", "1Ki", "2Ki", "1Ch", "2Ch",
+               "Ezr", "Neh", "Est", "Job", "Psa", "Pro", "Ecc", "Sng", "Isa", "Jer", "Lam", "Ezk", "Dan",
+               "Hos", "Jol", "Amo", "Oba", "Jon", "Mic", "Nam", "Hab", "Zep", "Hag", "Zec", "Mal"]
+
+
+def hebrew_map(tvtms, wlc_books, kjv):
+    """Map each Hebrew (WLC) verse to its KJV verse(s) using STEPBible's TVTMS 'Hebrew' rows."""
+    lines = open(tvtms, encoding="utf-8").read().split("\n")
+    start = next(i for i, l in enumerate(lines) if l.startswith("#DataStart(Expanded)"))
+    end = next(i for i, l in enumerate(lines) if l.startswith("#DataEnd(Expanded)"))
+    bidx = {b: i for i, b in enumerate(TVTMS_BOOKS)}
+
+    def parse_std(book, txt):
+        """'Gen.32:1' / 'Gen.5:32; 6:1' / 'Gen.2:25-3:1' / 'Psa.3:Title' -> [(c, v), ...] in KJV numbering."""
+        refs, chap = [], None
+        b = bidx[book]
+        for part in txt.replace(book + ".", "").split(";"):
+            part = part.strip()
+            if not part or "Title" in part:
+                continue
+            m = re.match(r"^(?:(\d+):)?(\d+)(?:-(?:(\d+):)?(\d+))?$", part)
+            if not m:
+                continue
+            c1 = int(m.group(1)) if m.group(1) else chap
+            v1 = int(m.group(2))
+            chap = c1
+            if m.group(4):
+                c2 = int(m.group(3)) if m.group(3) else c1
+                v2 = int(m.group(4))
+                c, v = c1, v1
+                while (c, v) <= (c2, v2):
+                    if c <= len(kjv[b][1]) and v <= len(kjv[b][1][c - 1]):
+                        refs.append((c, v))
+                        v += 1
+                    else:
+                        c, v = c + 1, 1
+                    if c > len(kjv[b][1]):
+                        break
+            else:
+                refs.append((c1, v1))
+        return refs
+
+    plain, parts = {}, collections.defaultdict(list)
+    for l in lines[start + 1:end]:
+        f = l.split("\t")
+        if len(f) < 4 or "Hebrew" not in [t.strip() for t in f[0].split("+")]:
+            continue
+        m = re.match(r"^([1-3]?[A-Za-z]{2,3})\.(\d+):(\d+|Title)(!\w+)?$", f[1].strip())
+        if not m or m.group(1) not in bidx or m.group(3) == "Title":
+            continue
+        key = (bidx[m.group(1)], int(m.group(2)), int(m.group(3)))
+        refs = parse_std(m.group(1), f[2].strip())
+        if m.group(4):
+            parts[key] += refs
+        else:
+            plain[key] = refs
+    out = {}
+    for b in range(39):
+        out[b] = []
+        for ci, vs in enumerate(wlc_books[b]):
+            row = []
+            for vi in range(len(vs)):
+                key = (b, ci + 1, vi + 1)
+                refs = plain.get(key) if key in plain else parts.get(key)
+                if refs is None:
+                    refs = [(ci + 1, vi + 1)] if ci < len(kjv[b][1]) and vi < len(kjv[b][1][ci]) else []
+                row.append([list(r) for r in dict.fromkeys(refs)])
+            out[b].append(row)
+    return out
+
+
+def strip_cantillation(t):
+    """Keep the vowel points, drop the cantillation marks (U+0591-U+05AF) and the paseq."""
+    t = re.sub("[\u0591-\u05AF\u05BD\u05C0]", "", t)
+    return " ".join(t.replace("/", "").split())
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--brenton-en", required=True)
     ap.add_argument("--brenton-gr", required=True)
     ap.add_argument("--tr", required=True)
+    ap.add_argument("--kjva", required=True)
+    ap.add_argument("--wlc", required=True)
+    ap.add_argument("--tvtms", required=True)
     a = ap.parse_args()
     kjv = json.load(open(os.path.join(DATA, "kjv.json"), encoding="utf-8"))
 
@@ -210,6 +320,12 @@ def main():
         for k in ("books", "labels", "chapters"):
             t[k].update(extra[k])
         t["names"] = {66 + i: name for i, (_, name) in enumerate(EXTRA)}
+    apoc = kjv_apocrypha(a.kjva)
+    for b in apoc:
+        m, _ = align(apoc[b], [[t.lstrip("¶") for t in vs] for vs in en_p["books"][b]])
+        by_label = {key: m[ci][vi] for ci, ch in enumerate(_keys_extra(en_p, b)) for vi, key in enumerate(ch)}
+        en_p.setdefault("map", {})[b] = m
+        gr_p.setdefault("map", {})[b] = [[by_label.get(key, []) for key in ch] for ch in _keys_extra(gr_p, b)]
 
     # Match Brenton's English to the KJV, then give each text a map by Brenton's chapter:verse labels.
     sims = []
@@ -246,6 +362,19 @@ def main():
     dump("lxx-en.json", en_p)
     dump("lxx-gr.json", gr_p)
     dump("tr.json", {"books": trbooks})
+    dump("kjv-apocrypha.json", {"books": apoc})
+
+    # The WLC file is in Hebrew Bible order; match its books to KJV order by name.
+    wlc = {re.sub(r"^III ", "3 ", re.sub(r"^II ", "2 ", re.sub(r"^I ", "1 ", x["name"]))): x
+           for x in json.load(open(a.wlc, encoding="utf-8"))["books"]}
+    wlc_books = {b: [[strip_cantillation(v["text"]) for v in c["verses"]] for c in wlc[kjv[b][0]]["chapters"]] for b in range(39)}
+    hmap = hebrew_map(a.tvtms, wlc_books, kjv)
+    # Check: every KJV verse should be reached from some Hebrew verse.
+    hit = collections.Counter((b, c, v) for b in hmap for ch in hmap[b] for refs in ch for c, v in refs)
+    missing = [(kjv[b][0], c + 1, v + 1) for b in range(39) for c, vs in enumerate(kjv[b][1]) for v in range(len(vs)) if (b, c + 1, v + 1) not in hit]
+    print("Hebrew map: KJV verses not reached:", len(missing), missing[:12])
+    print("Hebrew map: KJV verses reached more than once:", sum(1 for k, n in hit.items() if n > 1))
+    dump("wlc.json", {"books": wlc_books, "map": hmap})
 
 
 if __name__ == "__main__":
