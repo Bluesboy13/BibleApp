@@ -56,6 +56,22 @@
   <button id="player-close" class="pbtn" aria-label="Stop reading">✕</button>
 </div>
 
+<div id="versebar" hidden>
+  <span id="versebar-ref"></span>
+  <div class="swatches">
+    <button class="swatch hl-yellow" data-color="yellow" aria-label="Yellow highlight"></button>
+    <button class="swatch hl-green" data-color="green" aria-label="Green highlight"></button>
+    <button class="swatch hl-blue" data-color="blue" aria-label="Blue highlight"></button>
+    <button class="swatch hl-pink" data-color="pink" aria-label="Pink highlight"></button>
+  </div>
+  <div class="vb-actions">
+    <button id="vb-clear">Remove</button>
+    <button id="vb-copy">Copy</button>
+    <button id="vb-share">Share</button>
+    <button id="vb-close" aria-label="Close">✕</button>
+  </div>
+</div>
+
 <div id="planpill" hidden>
   <span id="planpill-text"></span>
   <button id="planpill-done">Mark done ✓</button>
@@ -90,6 +106,9 @@
     <h3>Saved spots</h3>
     <ul id="bm-list" class="list"></ul>
     <p id="bm-empty" class="muted">No saved spots yet.</p>
+    <h3>Saved verses</h3>
+    <ul id="hl-list" class="list hl-list"></ul>
+    <p id="hl-empty" class="muted">Tap any verse to highlight and save it.</p>
   </div>
 </section>
 
@@ -98,9 +117,35 @@
   <div class="panel-body" id="plan-body"></div>
 </section>
 
+<section id="panel-account" class="panel small" hidden aria-label="Account">
+  <div class="panel-head"><h2>Account</h2><button class="close" aria-label="Close">✕</button></div>
+  <div class="panel-body">
+    <p id="sync-status" class="muted sync-status">Loading…</p>
+    <div id="acct-out" hidden>
+      <button id="btn-google" class="secondary wide google">Continue with Google</button>
+      <div class="or"><span>or use your email</span></div>
+      <form id="acct-form" autocomplete="on">
+        <input id="acct-email" type="email" autocomplete="username" placeholder="Email" required>
+        <input id="acct-pass" type="password" autocomplete="current-password" placeholder="Password (6+ characters)" minlength="6" required>
+        <div class="acct-actions">
+          <button type="submit" class="primary" data-act="in">Sign in</button>
+          <button type="button" class="secondary" id="btn-signup">Create account</button>
+        </div>
+        <button type="button" class="link" id="btn-forgot">Forgot password?</button>
+      </form>
+    </div>
+    <div id="acct-in" hidden>
+      <p id="acct-verify" class="notice" hidden>Check your inbox to confirm your email, then come back here. <button type="button" class="link" id="btn-resend">Resend email</button> · <button type="button" class="link" id="btn-recheck">I’ve confirmed it</button></p>
+      <button id="btn-signout" class="secondary wide">Sign out</button>
+    </div>
+    <p class="muted small-note">Signing in keeps your place, bookmarks, saved verses and reading plan the same on all your devices.</p>
+  </div>
+</section>
+
 <section id="panel-set" class="panel small" hidden aria-label="Display settings">
   <div class="panel-head"><h2>Display</h2><button class="close" aria-label="Close">✕</button></div>
   <div class="panel-body">
+    <button id="open-account" class="account-row"><span class="acct-icon" aria-hidden="true">👤</span><span id="account-summary">Sign in to save your progress</span><span class="chev">›</span></button>
     <div class="row"><span>Text</span>
       <div class="seg" id="set-text"><button data-v="kjv">KJV</button><button data-v="lxx-gr">LXX Greek</button><button data-v="lxx-en">LXX English</button><button data-v="wlc">Hebrew</button></div>
     </div>
@@ -131,9 +176,6 @@
     <div class="row"><span>Voice</span>
       <div class="voice-pick"><select id="set-voice" aria-label="Reading voice"></select><button id="voice-test" class="secondary">Test</button></div>
     </div>
-    <h3>Sync</h3>
-    <p id="sync-status" class="muted sync-status">Loading…</p>
-    <button id="sync-btn" class="secondary wide" hidden>Sign in with Google</button>
     <p class="muted small-note">In Pages mode: tap the right or left edge (or swipe) to turn pages. Tap the middle to show or hide the menu.</p>
   </div>
 </section>

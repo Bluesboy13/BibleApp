@@ -32,6 +32,7 @@
     ribbon: { b: 0, c: 1, v: 1 },
     ribbonText: 'kjv',         // which text's numbering the ribbon is in
     bookmarks: [],
+    highlights: {},            // saved verses: key -> { color, t, ref, text }
     plan: { start: null, done: {}, active: null },
   };
   const state = loadState();
@@ -43,6 +44,7 @@
       ribbon: { ...DEFAULTS.ribbon, ...s.ribbon },
       ribbonText: s.ribbonText || 'kjv',
       bookmarks: Array.isArray(s.bookmarks) ? s.bookmarks : [],
+      highlights: s.highlights && typeof s.highlights === 'object' ? s.highlights : {},
       plan: { ...DEFAULTS.plan, ...s.plan, done: { ...(s.plan && s.plan.done) } },
       updatedAt: s.updatedAt || 0,   // last change to synced data (ribbon, bookmarks, plan)
       syncUid: s.syncUid || null,    // account this device last synced with
@@ -211,7 +213,8 @@
         if (i > 0 && !poetry && !under) h += '</p><p class="para">';
       }
       const label = vLabel(b, c, i + 1);
-      h += `<span class="v${i === 0 ? ' first' : ''}" data-c="${c}" data-v="${i + 1}"><sup class="vn">${esc(label)}</sup>${esc(t)} </span>`;
+      const hl = highlightOf(b, c, i + 1);
+      h += `<span class="v${i === 0 ? ' first' : ''}${hl ? ' hl hl-' + hl : ''}" data-c="${c}" data-v="${i + 1}"><sup class="vn">${esc(label)}</sup>${esc(t)} </span>`;
       if (under) h += kjvUnderHTML(b, c, i + 1);
     });
     return h + '</p></section>';
@@ -301,8 +304,18 @@
     const nb = e.target.closest('[data-book]');
     if (nb) { goTo(+nb.dataset.book, 1, 1); return; }
     if (window.getSelection && String(window.getSelection())) return;
-    setBars(!barsShown());
+    tapText(e);
   });
+  // A tap on a verse opens the verse toolbar (highlight, copy, share); a tap anywhere else shows or
+  // hides the menu bar. With the toolbar open, any tap just closes it.
+  function tapText(e) {
+    if (!$('#versebar').hidden) return closeVerseBar();
+    const v = e.target.closest('.v');
+    if (v && !e.target.closest('.kjv-under')) {
+      openVerseBar(v);
+      setBars(true);
+    } else setBars(!barsShown());
+  }
 
   // ---------- Page mode ----------
   const pager = $('#pager');
@@ -403,9 +416,10 @@
   pager.addEventListener('click', (e) => {
     if (swiped) { swiped = false; return; }
     const x = e.clientX / window.innerWidth;
+    if (!$('#versebar').hidden) return closeVerseBar();
     if (x > 0.7) nextPage();
     else if (x < 0.3) prevPage();
-    else setBars(!barsShown());
+    else tapText(e);
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') return closePanels();
@@ -531,11 +545,129 @@
   $('#set-mode').addEventListener('click', (e) => e.target.dataset.v && changeSetting('mode', e.target.dataset.v));
   $('#set-vn').addEventListener('click', (e) => e.target.dataset.v && changeSetting('vn', e.target.dataset.v === 'on'));
 
+  // ---------- Saved verses (highlights) ----------
+  // Verses are saved in KJV numbering where there is one, so a highlight shows in every text.
+  // Verses with no KJV counterpart (Septuagint additions) are saved by their own text and labels.
+  const HL_COLORS = ['yellow', 'green', 'blue', 'pink'];
+  const ownKey = (b, c, v) => `x:${SRC[b]}:${b}:${chLabel(b, c)}:${vLabel(b, c, v)}`;
+  function hlKeys(b, c, v) {
+    if (isExtra(b) || !MAP[b]) return isExtra(b) ? [ownKey(b, c, v)] : [`${b}:${c}:${v}`];
+    const refs = (MAP[b][c - 1] || [])[v - 1] || [];
+    return refs.length ? refs.map(([kc, kv]) => `${b}:${kc}:${kv}`) : [ownKey(b, c, v)];
+  }
+  function highlightOf(b, c, v) {
+    for (const k of hlKeys(b, c, v)) if (state.highlights[k]) return state.highlights[k].color;
+    return null;
+  }
+  let selected = null;   // { el, b, c, v }
+  function openVerseBar(el) {
+    closeVerseBar();
+    const root = el.closest('#flow') ? 'page' : 'scroll';
+    const b = root === 'page' ? pg.b : renderedBook;
+    selected = { el, b, c: +el.dataset.c, v: +el.dataset.v };
+    el.classList.add('selected');
+    $('#versebar-ref').textContent = ref(selected);
+    const cur = highlightOf(selected.b, selected.c, selected.v);
+    document.querySelectorAll('#versebar .swatch').forEach((s) => s.classList.toggle('on', s.dataset.color === cur));
+    $('#vb-clear').hidden = !cur;
+    $('#versebar').hidden = false;
+  }
+  function closeVerseBar() {
+    if (selected) selected.el.classList.remove('selected');
+    selected = null;
+    $('#versebar').hidden = true;
+  }
+  function setHighlight(color) {
+    if (!selected) return;
+    const { b, c, v, el } = selected;
+    const keys = hlKeys(b, c, v);
+    keys.forEach((k) => delete state.highlights[k]);
+    if (color) {
+      const k = keys[0];
+      const kjvKey = !k.startsWith('x:');
+      const [, kc, kv] = kjvKey ? k.split(':').map(Number) : [];
+      state.highlights[k] = {
+        color, t: Date.now(),
+        ref: kjvKey ? kjvRef({ b, c: kc, v: kv }) : ref({ b, c, v }),
+        text: (kjvKey ? kjvText(b, kc, kv) : verseText(b, c, v)).slice(0, 220),
+      };
+    }
+    // Update every copy of this verse on screen (scroll and page views).
+    document.querySelectorAll(`.v[data-c="${c}"][data-v="${v}"]`).forEach((x) => {
+      x.classList.remove('hl', ...HL_COLORS.map((h) => 'hl-' + h));
+      if (color) x.classList.add('hl', 'hl-' + color);
+    });
+    el.classList.toggle('hl', !!color);
+    touch();
+    closeVerseBar();
+    toast(color ? 'Verse saved' : 'Highlight removed');
+  }
+  function verseCopyText() {
+    const { b, c, v } = selected;
+    return `${verseText(b, c, v)}\n— ${ref(selected)} (${SRC[b] === 'kjv' ? 'KJV' : SRC[b] === 'tr' ? 'Greek NT' : TEXTS[state.settings.text].name})`;
+  }
+  $('#versebar').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button');
+    if (!btn || !selected) return;
+    if (btn.dataset.color) return setHighlight(btn.dataset.color);
+    if (btn.id === 'vb-clear') return setHighlight(null);
+    if (btn.id === 'vb-close') return closeVerseBar();
+    const text = verseCopyText();
+    if (btn.id === 'vb-share' && navigator.share) {
+      try { await navigator.share({ text }); } catch (err) { /* cancelled */ }
+      return closeVerseBar();
+    }
+    try { await navigator.clipboard.writeText(text); toast('Copied'); } catch (err) { toast('Couldn’t copy on this device'); }
+    closeVerseBar();
+  });
+  if (!navigator.share) $('#vb-share').hidden = true;
+
+  function renderHighlights() {
+    const items = Object.entries(state.highlights).sort((a, z) => z[1].t - a[1].t);
+    $('#hl-list').innerHTML = items.map(([k, h]) => `
+      <li>
+        <span class="dot hl-${h.color}"></span>
+        <button class="go" data-k="${esc(k)}">
+          <div class="ref">${esc(h.ref || '')}</div>
+          <div class="snip">${esc(h.text || '')}</div>
+        </button>
+        <button class="del" data-k="${esc(k)}" aria-label="Remove saved verse">✕</button>
+      </li>`).join('');
+    $('#hl-empty').hidden = items.length > 0;
+  }
+  $('#hl-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const k = btn.dataset.k;
+    if (btn.classList.contains('del')) {
+      delete state.highlights[k];
+      touch();
+      renderHighlights();
+      renderedBook = -1;
+      relayout();
+      return;
+    }
+    closePanels();
+    if (!k.startsWith('x:')) {
+      const [b, c, v] = k.split(':').map(Number);
+      const p = fromKjv({ b, c, v });
+      return goTo(p.b, p.c, p.v, true);
+    }
+    // A verse only the Septuagint has: open it if that text is on screen.
+    const [, , b, cl, vl] = k.split(':');
+    const book = +b;
+    if (!BIBLE[book] || !k.startsWith(`x:${SRC[book]}:`)) return toast('Switch to that text under Aa → Text to open this verse.');
+    const c = (CHLABELS[book] || BIBLE[book][1].map((_, i) => String(i + 1))).indexOf(cl) + 1 || 1;
+    const vs = (VLABELS[book] && VLABELS[book][c]) || BIBLE[book][1][c - 1].map((_, i) => String(i + 1));
+    goTo(book, c, vs.indexOf(vl) + 1 || 1, true);
+  });
+
   // ---------- Panels ----------
-  const PANELS = ['#panel-nav', '#panel-bm', '#panel-plan', '#panel-set'];
+  const PANELS = ['#panel-nav', '#panel-bm', '#panel-plan', '#panel-set', '#panel-account'];
   const anyPanelOpen = () => PANELS.some((p) => !$(p).hidden);
   function openPanel(id) {
     closePanels();
+    closeVerseBar();
     $(id).hidden = false;
     $('#scrim').hidden = false;
   }
@@ -618,7 +750,7 @@
   });
 
   // Bookmarks
-  $('#btn-bm').addEventListener('click', () => { renderBookmarks(); openPanel('#panel-bm'); });
+  $('#btn-bm').addEventListener('click', () => { renderBookmarks(); renderHighlights(); openPanel('#panel-bm'); });
   function renderBookmarks() {
     $('#ribbon-ref').textContent = ref(state.ribbon);
     $('#bm-add').textContent = `＋ Save this spot · ${ref(state.ribbon)}`;
@@ -669,6 +801,7 @@
 
   // Settings panel
   $('#btn-set').addEventListener('click', () => openPanel('#panel-set'));
+  $('#open-account').addEventListener('click', () => openPanel('#panel-account'));
 
   // ---------- Reading plan ----------
   const dayStart = (d) => Math.floor((d * CHAPTERS.length) / PLAN_DAYS);
@@ -1358,6 +1491,7 @@
         // Shared in KJV numbering so devices reading different texts still agree on the place.
         ribbon: BIBLE && state.ribbonText === state.settings.text ? toKjv(state.ribbon) : state.ribbon,
         bookmarks: state.bookmarks,
+        highlights: state.highlights,
         plan: { start: state.plan.start, done: state.plan.done },
         updatedAt: state.updatedAt,
       };
@@ -1369,6 +1503,7 @@
       if (first) {
         const seen = new Set(state.bookmarks.map((x) => x.t));
         state.bookmarks = state.bookmarks.concat((remote.bookmarks || []).filter((x) => !seen.has(x.t)));
+        state.highlights = { ...(remote.highlights || {}), ...state.highlights };
         if (remote.plan && remote.plan.start) {
           const sameStart = remote.plan.start === state.plan.start;
           state.plan.start = remote.plan.start;
@@ -1379,6 +1514,7 @@
       } else {
         if (remote.ribbon) { state.ribbon = remote.ribbon; state.ribbonText = 'kjv'; }
         state.bookmarks = remote.bookmarks || [];
+        state.highlights = remote.highlights || {};
         state.plan.start = remote.plan ? remote.plan.start : null;
         state.plan.done = (remote.plan && remote.plan.done) || {};
         state.updatedAt = remote.updatedAt || 0;
@@ -1394,7 +1530,9 @@
         goTo(r.b, r.c, r.v);
         syncHold = held;
       }
-      if (!$('#panel-bm').hidden) renderBookmarks();
+      if (!$('#panel-bm').hidden) { renderBookmarks(); renderHighlights(); }
+      renderedBook = -1;
+      relayout();
       if (!$('#panel-plan').hidden) renderPlan();
       showPlanPill();
       return first;

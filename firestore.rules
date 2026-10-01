@@ -1,18 +1,24 @@
 rules_version = '2';
-// Paste these into Firebase console → Firestore Database → Rules.
-// Only people listed in the "allowed" collection (document ID = their Gmail address) can sync.
+// Paste these into Firebase console → Firestore Database → Rules, then Publish.
+//
+// Anyone can create an account (Google, or email + password once the email is confirmed), and each
+// person can only read and write their own saved data. Nothing else in the database is reachable.
+//
+// To allow only people you approve instead: add a collection "allowed" with one document per
+// person (document ID = their email in lowercase), and add  && approved()  to the users rule below.
 service cloud.firestore {
   match /databases/{database}/documents {
-    function approved() {
+    function signedIn() {
       return request.auth != null
-        && request.auth.token.email_verified == true
-        && exists(/databases/$(database)/documents/allowed/$(request.auth.token.email));
+        && (request.auth.token.email_verified == true
+            || request.auth.token.firebase.sign_in_provider == 'google.com');
     }
-    // Each person can only read and write their own document.
+    function approved() {
+      return exists(/databases/$(database)/documents/allowed/$(request.auth.token.email));
+    }
     match /users/{uid} {
-      allow read, write: if approved() && request.auth.uid == uid;
+      allow read, write: if signedIn() && request.auth.uid == uid;
     }
-    // Nobody can change the approved list from the app; you edit it in the console.
     match /{document=**} {
       allow read, write: if false;
     }
