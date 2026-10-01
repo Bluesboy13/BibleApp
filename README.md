@@ -9,7 +9,7 @@ A simple, book-like King James Bible reader. Plain HTML/CSS/JS, installable on p
   Recordings are made with `tools/audio/generate.py` and live in `audio/<book>/<chapter>.m4a` with verse timings in a matching `.json`.
 - **Ribbon:** remembers where you left off and reopens there. Tap the bookmark icon to save more spots.
 - **Reading plan:** Genesis to Revelation in 365 days (about 3–4 chapters a day), with days to check off.
-- **Septuagint (LXX):** under **Aa → Text**, switch to the Greek Old Testament (with the Textus Receptus for the New Testament) or Brenton's English translation of the Septuagint. Turn on **KJV underneath** to see the matching KJV verse(s) under each verse. Your place, bookmarks and reading plan carry across (they're kept in KJV numbering).
+- **Septuagint (LXX):** under **Aa → Text**, switch to the Greek Old Testament (with the Textus Receptus for the New Testament) or Brenton's English translation of the Septuagint. The extra Septuagint books (1 Esdras, Tobit, Judith, 1–4 Maccabees, Wisdom, Sirach, Prayer of Manasseh, Baruch, Letter of Jeremiah, Susanna, Bel and the Dragon) appear at the bottom of the book list. Turn on **KJV underneath** to see the matching KJV verse(s) under each verse. Your place, bookmarks and reading plan carry across (they're kept in KJV numbering).
 - **Themes:** Paper, White and Night, with adjustable text size and font.
 
 Data is kept on the device (localStorage). Optionally, **Sign in with Google** (under **Aa**) syncs the ribbon, bookmarks and reading plan across devices through Firebase. Only Gmail addresses you approve can sync. The KJV text is public domain: the 1769 standard text, cross-checked verse by verse against three independent KJV copies. Paragraph breaks follow the KJV's own ¶ marks.

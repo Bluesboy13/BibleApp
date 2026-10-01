@@ -30,6 +30,12 @@ OT_CODES = ["GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT", "1SA", "2SA"
             "HOS", "JOL", "AMO", "OBA", "JON", "MIC", "NAM", "HAB", "ZEP", "HAG", "ZEC", "MAL"]
 NT_CODES = ["MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO", "GAL", "EPH", "PHP", "COL", "1TH", "2TH",
             "1TI", "2TI", "TIT", "PHM", "HEB", "JAS", "1PE", "2PE", "1JN", "2JN", "3JN", "JUD", "REV"]
+# The books of the Septuagint that the KJV doesn't have, shown after Revelation (app book index 66+).
+EXTRA = [("1ES", "1 Esdras"), ("TOB", "Tobit"), ("JDT", "Judith"), ("1MA", "1 Maccabees"), ("2MA", "2 Maccabees"),
+         ("3MA", "3 Maccabees"), ("4MA", "4 Maccabees"), ("WIS", "Wisdom of Solomon"), ("SIR", "Sirach"),
+         ("MAN", "Prayer of Manasseh"), ("BAR", "Baruch"), ("LJE", "Letter of Jeremiah"), ("SUS", "Susanna"),
+         ("BEL", "Bel and the Dragon")]
+EXTRA_CODES = [c for c, _ in EXTRA]
 # Chapters left out because they are separate books in English Bibles (Susanna, Bel and the Dragon).
 SKIP_CHAPTERS = {"DAG": {"0", "13"}}
 
@@ -41,9 +47,9 @@ def clean_usfm(t):
     return " ".join(t.split())
 
 
-def parse_brenton_en(d):
+def parse_brenton_en(d, codes=OT_CODES):
     books = {}
-    for code in OT_CODES:
+    for code in codes:
         f = glob.glob(os.path.join(d, f"*-{code}eng-Brenton.usfm"))[0]
         src = open(f, encoding="utf-8-sig").read()
         src = re.sub(r"\\vp (.*?)\\vp\*", lambda m: "\\vlabel " + m.group(1).strip() + " ", src)
@@ -73,7 +79,7 @@ def parse_brenton_en(d):
             (c, [(lab, clean_usfm(txt), p) for lab, txt, p in vs if clean_usfm(txt)])
             for c, vs in chapters.items() if c not in SKIP_CHAPTERS.get(code, ()))
         books[code] = collections.OrderedDict((c, vs) for c, vs in books[code].items() if vs)   # e.g. Proverbs 30 is only a note
-    return split_esdras(books)
+    return split_esdras(books) if "EZR" in books else books
 
 
 def clean_tex(t):
@@ -81,9 +87,9 @@ def clean_tex(t):
     return " ".join(t.split())
 
 
-def parse_brenton_gr(d):
+def parse_brenton_gr(d, codes=OT_CODES):
     books = {}
-    for code in OT_CODES:
+    for code in codes:
         name = {"NEH": None}.get(code, code)
         if name is None:
             continue
@@ -111,7 +117,7 @@ def parse_brenton_gr(d):
             (c, [(lab, clean_tex(txt), p) for lab, txt, p in vs if clean_tex(txt)])
             for c, vs in chapters.items() if c not in SKIP_CHAPTERS.get(code, ()))
         books[code] = collections.OrderedDict((c, vs) for c, vs in books[code].items() if vs)
-    return split_esdras(books)
+    return split_esdras(books) if "EZR" in books else books
 
 
 def split_esdras(books):
@@ -198,6 +204,12 @@ def main():
     en = parse_brenton_en(a.brenton_en)
     gr = parse_brenton_gr(a.brenton_gr)
     (en_p, en_keys), (gr_p, gr_keys) = pack(en, OT_CODES), pack(gr, OT_CODES)
+    # Add the extra books after Revelation, with their names (they have no KJV to match against).
+    for t, parsed in ((en_p, parse_brenton_en(a.brenton_en, EXTRA_CODES)), (gr_p, parse_brenton_gr(a.brenton_gr, EXTRA_CODES))):
+        extra, _ = pack(parsed, EXTRA_CODES, offset=66)
+        for k in ("books", "labels", "chapters"):
+            t[k].update(extra[k])
+        t["names"] = {66 + i: name for i, (_, name) in enumerate(EXTRA)}
 
     # Match Brenton's English to the KJV, then give each text a map by Brenton's chapter:verse labels.
     sims = []

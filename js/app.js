@@ -78,7 +78,9 @@
   const isGreek = (b) => SRC[b] === 'lxx-gr' || SRC[b] === 'tr';
 
   // ----- Moving between a text's numbering and the KJV's -----
+  const isExtra = (b) => b >= 66;
   function toKjv(p) {
+    if (isExtra(p.b)) return { b: 38, c: KJV[38][1].length, v: 1 };   // no KJV book: nearest is the end of the OT
     const m = MAP[p.b];
     if (!m) return { b: p.b, c: p.c, v: p.v };
     const ch = m[p.c - 1] || [];
@@ -151,6 +153,17 @@
       }
       REVERSE.push(null);
     });
+    // Septuagint books the KJV doesn't have (Tobit, Maccabees, Wisdom...) follow Revelation.
+    if (ot && ot.names) {
+      Object.keys(ot.names).map(Number).sort((a, z) => a - z).forEach((b) => {
+        BIBLE[b] = [ot.names[b], ot.books[b]];
+        SRC[b] = id;
+        CHLABELS[b] = (ot.chapters || {})[b] || null;
+        VLABELS[b] = (ot.labels || {})[b] || null;
+        MAP[b] = null;
+        REVERSE[b] = null;
+      });
+    }
     return true;
   }
   async function loadText(id) {
@@ -180,7 +193,7 @@
   function chapterHTML(b, c) {
     const verses = BIBLE[b][1][c - 1];
     const poetry = isPoetry(b, c);
-    const under = state.settings.under && SRC[b] !== 'kjv';
+    const under = state.settings.under && SRC[b] !== 'kjv' && !isExtra(b);
     let h = `<section class="chapter${poetry ? ' poetry' : ''}${under ? ' with-under' : ''}" data-c="${c}">`;
     h += `<p><span class="dropcap">${esc(chLabel(b, c))}</span>`;
     verses.forEach((t, i) => {
@@ -551,6 +564,12 @@
       ['Ketuvim · The Writings', [18, 19, 17, 21, 7, 24, 20, 16, 26, 14, 15, 12, 13]],
     ]],
   ];
+  // Only shown when a Septuagint text is selected.
+  const SEPTUAGINT_EXTRA = ['Septuagint · Additional Books', [
+    ['History', range(66, 72)],
+    ['Wisdom & Prayer', [73, 74, 75]],
+    ['Prophets & Additions to Daniel', [76, 77, 78, 79]],
+  ]];
   function showBooks() {
     $('#nav-title').textContent = 'Books';
     $('#nav-back').hidden = true;
@@ -561,7 +580,8 @@
       groups.map(([name, books]) => `<div class="book-group"><div class="group-name">${name}</div>${list(books)}</div>`).join('');
     const body = $('#nav-body');
     body.innerHTML = CHRISTIAN_ORDER.map((t) => section(t)).join('') +
-      TANAKH_ORDER.map((t) => section(t, ' tanakh')).join('');
+      TANAKH_ORDER.map((t) => section(t, ' tanakh')).join('') +
+      (BIBLE.length > 66 ? section(SEPTUAGINT_EXTRA, ' tanakh') : '');
     body.scrollTop = 0;
   }
   function showChapters(b) {
@@ -594,8 +614,8 @@
     list.innerHTML = items.map((bm) => `
       <li>
         <button class="go" data-t="${bm.t}">
-          <div class="ref">${esc(kjvRef(bm))}</div>
-          <div class="snip">${esc(kjvText(bm.b, bm.c, bm.v))}</div>
+          <div class="ref">${esc(isExtra(bm.b) ? bm.label || '' : kjvRef(bm))}</div>
+          <div class="snip">${esc(isExtra(bm.b) ? bm.snip || '' : kjvText(bm.b, bm.c, bm.v))}</div>
         </button>
         <button class="del" data-t="${bm.t}" aria-label="Delete bookmark">✕</button>
       </li>`).join('');
@@ -603,12 +623,15 @@
   }
   $('.ribbon-card').addEventListener('click', closePanels);
   $('#bm-add').addEventListener('click', () => {
-    const r = toKjv(state.ribbon);   // bookmarks are kept in KJV numbering so they work in every text
+    // Bookmarks are kept in KJV numbering so they work in every text. A Septuagint-only book has no
+    // KJV numbering, so it keeps its own reference and a snippet of the text.
+    const here = state.ribbon;
+    const r = isExtra(here.b) ? { ...here, label: ref(here), snip: verseText(here.b, here.c, here.v).slice(0, 160) } : toKjv(here);
     if (state.bookmarks.some((bm) => bm.b === r.b && bm.c === r.c && bm.v === r.v)) {
       toast('Already saved');
       return;
     }
-    state.bookmarks.push({ b: r.b, c: r.c, v: r.v, t: Date.now() });
+    state.bookmarks.push({ ...r, t: Date.now() });
     touch();
     renderBookmarks();
     toast(`Saved ${ref(state.ribbon)}`);
@@ -625,7 +648,8 @@
       renderBookmarks();
     } else {
       closePanels();
-      const p = fromKjv(bm);
+      if (isExtra(bm.b) && !BIBLE[bm.b]) return toast('This book is in the Septuagint: switch to LXX under Aa → Text.');
+      const p = isExtra(bm.b) ? bm : fromKjv(bm);
       goTo(p.b, p.c, p.v, true);
     }
   });
