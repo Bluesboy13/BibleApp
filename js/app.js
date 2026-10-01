@@ -382,18 +382,45 @@
   // Book / chapter picker
   $('#btn-nav').addEventListener('click', () => { showBooks(); openPanel('#panel-nav'); });
   $('#nav-back').addEventListener('click', showBooks);
+  // Book groupings. Indices are positions in the KJV order (Genesis = 0 ... Revelation = 65).
+  const range = (a, z) => Array.from({ length: z - a + 1 }, (_, i) => a + i);
+  const CHRISTIAN_ORDER = [
+    ['Old Testament', [
+      ['The Law', range(0, 4)],
+      ['History', range(5, 16)],
+      ['Poetry & Wisdom', range(17, 21)],
+      ['Major Prophets', range(22, 26)],
+      ['Minor Prophets', range(27, 38)],
+    ]],
+    ['New Testament', [
+      ['Gospels', range(39, 42)],
+      ['History', [43]],
+      ['Letters of Paul', range(44, 56)],
+      ['General Letters', range(57, 64)],
+      ['Prophecy', [65]],
+    ]],
+  ];
+  // The Hebrew Bible (Tanakh) in its traditional Jewish order: Torah, Nevi'im, Ketuvim.
+  const TANAKH_ORDER = [
+    ['Hebrew Bible · Tanakh', [
+      ['Torah · The Law', range(0, 4)],
+      ['Nevi’im · The Prophets: Former', [5, 6, 8, 9, 10, 11]],
+      ['Nevi’im · The Prophets: Latter', [22, 23, 25]],
+      ['Nevi’im · The Twelve', range(27, 38)],
+      ['Ketuvim · The Writings', [18, 19, 17, 21, 7, 24, 20, 16, 26, 14, 15, 12, 13]],
+    ]],
+  ];
   function showBooks() {
     $('#nav-title').textContent = 'Books';
     $('#nav-back').hidden = true;
-    const grid = (from, to) => {
-      let h = '<div class="book-grid">';
-      for (let b = from; b < to; b++) {
-        h += `<button data-b="${b}" class="${b === state.ribbon.b ? 'current' : ''}">${esc(bookName(b))}</button>`;
-      }
-      return h + '</div>';
-    };
+    const list = (books) => '<div class="book-list">' + books.map((b) =>
+      `<button data-b="${b}" class="${b === state.ribbon.b ? 'current' : ''}">${esc(bookName(b))}</button>`).join('') + '</div>';
+    const section = ([title, groups], extra = '') =>
+      `<div class="testament${extra}">${title}</div>` +
+      groups.map(([name, books]) => `<div class="book-group"><div class="group-name">${name}</div>${list(books)}</div>`).join('');
     const body = $('#nav-body');
-    body.innerHTML = `<div class="testament">Old Testament</div>${grid(0, 39)}<div class="testament">New Testament</div>${grid(39, 66)}`;
+    body.innerHTML = CHRISTIAN_ORDER.map((t) => section(t)).join('') +
+      TANAKH_ORDER.map((t) => section(t, ' tanakh')).join('');
     body.scrollTop = 0;
   }
   function showChapters(b) {

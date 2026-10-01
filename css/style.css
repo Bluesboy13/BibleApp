@@ -194,13 +194,17 @@ body.mode-page #reader { display: none; }
 
 /* Nav */
 .testament { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 6px 0 8px; font-weight: 600; }
-.book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px; margin-bottom: 18px; }
-.book-grid button { text-align: left; padding: 9px 10px; border-radius: 8px; font-family: var(--serif); font-size: 16px; }
-.book-grid button.current { color: var(--accent); font-weight: 600; }
+.testament.tanakh { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.book-group { margin: 0 0 14px; }
+.group-name { font-family: var(--serif); font-style: italic; color: var(--accent); font-size: 15px; margin: 0 0 2px 10px; }
+/* Books run down the column (then into a second column), in reading order. */
+.book-list { columns: 2 150px; column-gap: 8px; }
+.book-list button { display: block; width: 100%; break-inside: avoid; text-align: left; padding: 6px 10px; border-radius: 8px; font-family: var(--serif); font-size: 16px; }
+.book-list button.current { color: var(--accent); font-weight: 600; }
 .chap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
 .chap-grid button { aspect-ratio: 1; border: 1px solid var(--rule); border-radius: 8px; font-family: var(--serif); font-size: 17px; }
 .chap-grid button.current { background: var(--accent); color: #fff; border-color: var(--accent); }
-.book-grid button:hover, .chap-grid button:hover, .list li:hover { background: var(--hover); }
+.book-list button:hover, .chap-grid button:hover, .list li:hover { background: var(--hover); }
 
 /* Bookmarks */
 .ribbon-card { display: flex; gap: 14px; align-items: center; padding: 6px 0 16px; cursor: pointer; }
