@@ -10,13 +10,25 @@
   const POETRY = new Set([18, 19, 21, 24]);
   const isPoetry = (b, c) => POETRY.has(b) || (b === 17 && c >= 3 && c <= 41);
 
-  let BIBLE = null;          // [[bookName, [[verse, ...], ...]], ...]
-  let CHAPTERS = [];         // flat list of [b, c] for the reading plan
+  let BIBLE = null;          // the text on screen: [[bookName, [[verse, ...], ...]], ...]
+  let KJV = null;            // the King James text (always loaded; plan, bookmarks and "KJV under" use it)
+  let CHAPTERS = [];         // flat list of [b, c] for the reading plan (KJV chapters)
+  // Alternative texts. Old Testament books come from the text's file; New Testament books from `nt`.
+  const TEXTS = {
+    kjv: { name: 'KJV', short: '' },
+    'lxx-gr': { name: 'Septuagint (Greek)', short: 'LXX', file: 'data/lxx-gr.json', nt: 'data/tr.json', lang: 'el' },
+    'lxx-en': { name: 'Septuagint (Brenton English)', short: 'LXX', file: 'data/lxx-en.json', lang: 'en' },
+  };
+  const loadedTexts = {};    // file -> parsed JSON
+  // Per book, for the text on screen: where it came from, printed chapter/verse labels, and its
+  // map to KJV verses (null = same numbering as the KJV).
+  let SRC = [], CHLABELS = [], VLABELS = [], MAP = [], REVERSE = [];
 
   // ---------- Saved state ----------
   const DEFAULTS = {
-    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left', voice: '', rate: 0.9, follow: 'word' },
+    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left', voice: '', rate: 0.9, follow: 'word', text: 'kjv', under: false },
     ribbon: { b: 0, c: 1, v: 1 },
+    ribbonText: 'kjv',         // which text's numbering the ribbon is in
     bookmarks: [],
     plan: { start: null, done: {}, active: null },
   };
@@ -27,6 +39,7 @@
     return {
       settings: { ...DEFAULTS.settings, ...s.settings },
       ribbon: { ...DEFAULTS.ribbon, ...s.ribbon },
+      ribbonText: s.ribbonText || 'kjv',
       bookmarks: Array.isArray(s.bookmarks) ? s.bookmarks : [],
       plan: { ...DEFAULTS.plan, ...s.plan, done: { ...(s.plan && s.plan.done) } },
       updatedAt: s.updatedAt || 0,   // last change to synced data (ribbon, bookmarks, plan)
@@ -56,7 +69,96 @@
   const bookName = (b) => BIBLE[b][0];
   const chapterCount = (b) => BIBLE[b][1].length;
   const verseText = (b, c, v) => ((BIBLE[b][1][c - 1] || [])[v - 1] || '').replace('¶', '');
-  const ref = (p) => `${bookName(p.b)} ${p.c}:${p.v}`;
+  const kjvText = (b, c, v) => ((KJV[b][1][c - 1] || [])[v - 1] || '').replace('¶', '');
+  // Printed chapter and verse numbers (the LXX sometimes skips numbers or adds lettered verses).
+  const chLabel = (b, c) => (CHLABELS[b] ? CHLABELS[b][c - 1] : String(c));
+  const vLabel = (b, c, v) => (VLABELS[b] && VLABELS[b][c] ? VLABELS[b][c][v - 1] : String(v));
+  const ref = (p) => `${bookName(p.b)} ${chLabel(p.b, p.c)}:${vLabel(p.b, p.c, p.v)}`;
+  const kjvRef = (p) => `${KJV[p.b][0]} ${p.c}:${p.v}`;
+  const isGreek = (b) => SRC[b] === 'lxx-gr' || SRC[b] === 'tr';
+
+  // ----- Moving between a text's numbering and the KJV's -----
+  function toKjv(p) {
+    const m = MAP[p.b];
+    if (!m) return { b: p.b, c: p.c, v: p.v };
+    const ch = m[p.c - 1] || [];
+    for (let v = p.v; v >= 1; v--) if (ch[v - 1] && ch[v - 1].length) return { b: p.b, c: ch[v - 1][0][0], v: ch[v - 1][0][1] };
+    for (let c = p.c - 1; c >= 1; c--) {
+      const prev = m[c - 1] || [];
+      for (let v = prev.length; v >= 1; v--) if (prev[v - 1].length) return { b: p.b, c: prev[v - 1][0][0], v: prev[v - 1][0][1] };
+    }
+    return { b: p.b, c: 1, v: 1 };
+  }
+  function fromKjv(p) {
+    const m = MAP[p.b];
+    if (!m) {
+      const c = Math.min(Math.max(1, p.c), chapterCount(p.b));
+      return { b: p.b, c, v: Math.min(Math.max(1, p.v), BIBLE[p.b][1][c - 1].length) };
+    }
+    if (!REVERSE[p.b]) {
+      const r = {};
+      m.forEach((ch, ci) => ch.forEach((refs, vi) => refs.forEach(([kc, kv]) => { r[`${kc}:${kv}`] = { c: ci + 1, v: vi + 1 }; })));
+      REVERSE[p.b] = r;
+    }
+    for (let v = p.v; v >= 1; v--) {
+      const hit = REVERSE[p.b][`${p.c}:${v}`];
+      if (hit) return { b: p.b, ...hit };
+    }
+    for (let c = p.c - 1; c >= 1; c--) {
+      for (let v = 200; v >= 1; v--) { const hit = REVERSE[p.b][`${c}:${v}`]; if (hit) return { b: p.b, ...hit }; }
+    }
+    return { b: p.b, c: 1, v: 1 };
+  }
+  // Put the ribbon into the numbering of the text on screen.
+  function syncRibbonText() {
+    const id = state.settings.text;
+    if (state.ribbonText === id) return;
+    const fromId = state.ribbonText;
+    let k = state.ribbon;
+    if (fromId !== 'kjv') {
+      // The ribbon is in another text's numbering: go through the KJV using that text's map.
+      const saved = [BIBLE, SRC, CHLABELS, VLABELS, MAP, REVERSE];
+      if (!buildText(fromId)) { k = { b: 0, c: 1, v: 1 }; } else k = toKjv(k);
+      [BIBLE, SRC, CHLABELS, VLABELS, MAP, REVERSE] = saved;
+    }
+    state.ribbon = fromKjv(k);
+    state.ribbonText = id;
+  }
+  // Assemble the text on screen. Returns false if its files aren't loaded yet.
+  function buildText(id) {
+    const t = TEXTS[id] || TEXTS.kjv;
+    const ot = t.file ? loadedTexts[t.file] : null;
+    const nt = t.nt ? loadedTexts[t.nt] : null;
+    if ((t.file && !ot) || (t.nt && !nt)) return false;
+    BIBLE = []; SRC = []; CHLABELS = []; VLABELS = []; MAP = []; REVERSE = [];
+    KJV.forEach(([name, chapters], b) => {
+      const fromOt = ot && ot.books[b];
+      const fromNt = nt && nt.books[b];
+      if (fromOt) {
+        BIBLE.push([name, fromOt]);
+        SRC.push(id);
+        CHLABELS.push((ot.chapters || {})[b] || null);
+        VLABELS.push((ot.labels || {})[b] || null);
+        MAP.push((ot.map || {})[b] || null);
+      } else if (fromNt) {
+        BIBLE.push([name, fromNt]);
+        SRC.push('tr');
+        CHLABELS.push(null); VLABELS.push(null); MAP.push(null);
+      } else {
+        BIBLE.push([name, chapters]);
+        SRC.push('kjv');
+        CHLABELS.push(null); VLABELS.push(null); MAP.push(null);
+      }
+      REVERSE.push(null);
+    });
+    return true;
+  }
+  async function loadText(id) {
+    const t = TEXTS[id] || TEXTS.kjv;
+    for (const f of [t.file, t.nt].filter(Boolean)) {
+      if (!loadedTexts[f]) loadedTexts[f] = await (await fetch(f)).json();
+    }
+  }
   const esc = (s) => s.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
 
   let toastTimer = 0;
@@ -78,17 +180,27 @@
   function chapterHTML(b, c) {
     const verses = BIBLE[b][1][c - 1];
     const poetry = isPoetry(b, c);
-    let h = `<section class="chapter${poetry ? ' poetry' : ''}" data-c="${c}">`;
-    h += `<p><span class="dropcap">${c}</span>`;
+    const under = state.settings.under && SRC[b] !== 'kjv';
+    let h = `<section class="chapter${poetry ? ' poetry' : ''}${under ? ' with-under' : ''}" data-c="${c}">`;
+    h += `<p><span class="dropcap">${esc(chLabel(b, c))}</span>`;
     verses.forEach((t, i) => {
-      // ¶ marks a paragraph break in the KJV text; start a new paragraph there in prose.
+      // ¶ marks a paragraph break in the text; start a new paragraph there in prose.
       if (t[0] === '¶') {
         t = t.slice(1);
-        if (i > 0 && !poetry) h += '</p><p class="para">';
+        if (i > 0 && !poetry && !under) h += '</p><p class="para">';
       }
-      h += `<span class="v${i === 0 ? ' first' : ''}" data-c="${c}" data-v="${i + 1}"><sup class="vn">${i + 1}</sup>${esc(t)} </span>`;
+      const label = vLabel(b, c, i + 1);
+      h += `<span class="v${i === 0 ? ' first' : ''}" data-c="${c}" data-v="${i + 1}"><sup class="vn">${esc(label)}</sup>${esc(t)} </span>`;
+      if (under) h += kjvUnderHTML(b, c, i + 1);
     });
     return h + '</p></section>';
+  }
+  // The matching KJV verse(s) under a verse of another text.
+  function kjvUnderHTML(b, c, v) {
+    const refs = MAP[b] ? ((MAP[b][c - 1] || [])[v - 1] || []) : [[c, v]];
+    if (!refs.length) return '<span class="kjv-under none" lang="en">— not in the KJV —</span>';
+    return '<span class="kjv-under" lang="en">' + refs.map(([kc, kv]) =>
+      `<span class="kref">${MAP[b] ? `${kc}:${kv}` : ''}</span>${esc(kjvText(b, kc, kv))}`).join(' ') + '</span>';
   }
   function bookNavHTML(b) {
     const prev = b > 0 ? `<button data-book="${b - 1}">‹ ${esc(bookName(b - 1))}</button>` : '<span></span>';
@@ -209,7 +321,7 @@
     pg.page = Math.max(0, Math.min(pg.pages - 1, p));
     flow.classList.toggle('no-anim', !animate);
     flow.style.transform = `translateX(${-pg.page * pg.step}px)`;
-    $('#pagefoot').textContent = `${bookName(pg.b)} ${pg.c}  ·  ${pg.page + 1} of ${pg.pages}`;
+    $('#pagefoot').textContent = `${bookName(pg.b)} ${chLabel(pg.b, pg.c)}  ·  ${pg.page + 1} of ${pg.pages}`;
     setRibbon(pagePosition());
   }
   // First verse that starts on the current page (or the one running onto it).
@@ -286,7 +398,8 @@
   }
   function updateTitle() {
     const r = state.ribbon;
-    $('#title').textContent = `${bookName(r.b)} ${r.c}`;
+    const t = TEXTS[state.settings.text];
+    $('#title').textContent = `${bookName(r.b)} ${chLabel(r.b, r.c)}${t.short && SRC[r.b] !== 'kjv' ? (SRC[r.b] === 'tr' ? ' · TR' : ' · ' + t.short) : ''}`;
   }
 
   function goTo(b, c, v, flash) {
@@ -328,13 +441,17 @@
     body.classList.add('theme-' + s.theme, 'font-' + s.font);
     body.classList.toggle('hide-vn', !s.vn);
     body.classList.toggle('justify', s.align === 'justify');
+    $('#row-under').hidden = s.text === 'kjv';
+    const lang = (TEXTS[s.text] || TEXTS.kjv).lang === 'el' ? 'el' : 'en';
+    bookEl.lang = lang;
+    flow.lang = lang;
     body.classList.toggle('follow-verse', s.follow === 'verse');
     body.classList.toggle('mode-page', s.mode === 'page');
     pager.hidden = s.mode !== 'page';
     document.documentElement.style.setProperty('--size', s.size + 'px');
     document.querySelector('meta[name="theme-color"]').content = THEME_COLORS[s.theme];
     $('#btn-vn').setAttribute('aria-pressed', String(s.vn));
-    for (const [id, val] of [['#set-font', s.font], ['#set-theme', s.theme], ['#set-align', s.align], ['#set-follow', s.follow], ['#set-mode', s.mode], ['#set-vn', s.vn ? 'on' : 'off']]) {
+    for (const [id, val] of [['#set-font', s.font], ['#set-theme', s.theme], ['#set-align', s.align], ['#set-text', s.text], ['#set-under', s.under ? 'on' : 'off'], ['#set-follow', s.follow], ['#set-mode', s.mode], ['#set-vn', s.vn ? 'on' : 'off']]) {
       $(id).querySelectorAll('button').forEach((btn) => btn.classList.toggle('on', btn.dataset.v === val));
     }
   }
@@ -344,6 +461,7 @@
     const wasPage = state.settings.mode === 'page';
     state.settings[key] = val;
     applySettings();
+    if (key === 'under') renderedBook = -1;   // the page itself changes, not just its styling
     if (key === 'mode') {
       if (val === 'scroll') { renderedBook = -1; flow.innerHTML = ''; setBars(true); }
       if (val === 'page' && !wasPage) setBars(false);
@@ -361,6 +479,29 @@
   $('#set-font').addEventListener('click', (e) => e.target.dataset.v && changeSetting('font', e.target.dataset.v));
   $('#set-theme').addEventListener('click', (e) => e.target.dataset.v && changeSetting('theme', e.target.dataset.v));
   $('#set-align').addEventListener('click', (e) => e.target.dataset.v && changeSetting('align', e.target.dataset.v));
+  $('#set-under').addEventListener('click', (e) => e.target.dataset.v && changeSetting('under', e.target.dataset.v === 'on'));
+  $('#set-text').addEventListener('click', (e) => e.target.dataset.v && changeText(e.target.dataset.v));
+  // Switch between the KJV and the Septuagint, keeping the reader's place.
+  async function changeText(id) {
+    if (id === state.settings.text || !KJV) return;
+    const t = TEXTS[id];
+    if ((t.file && !loadedTexts[t.file]) || (t.nt && !loadedTexts[t.nt])) {
+      toast(`Loading ${t.name}…`);
+      try { await loadText(id); } catch (e) { return toast('Couldn’t load that text. Check your connection.'); }
+    }
+    if (player.active) stopPlayer();
+    const k = toKjv(state.ribbon);
+    state.settings.text = id;
+    buildText(id);
+    state.ribbon = fromKjv(k);
+    state.ribbonText = id;
+    renderedBook = -1;
+    applySettings();
+    const r = state.ribbon;
+    goTo(r.b, r.c, r.v);
+    save();
+    toast(t.name);
+  }
   $('#set-mode').addEventListener('click', (e) => e.target.dataset.v && changeSetting('mode', e.target.dataset.v));
   $('#set-vn').addEventListener('click', (e) => e.target.dataset.v && changeSetting('vn', e.target.dataset.v === 'on'));
 
@@ -429,7 +570,7 @@
     let h = '<div class="chap-grid">';
     for (let c = 1; c <= chapterCount(b); c++) {
       const cur = b === state.ribbon.b && c === state.ribbon.c;
-      h += `<button data-b="${b}" data-c="${c}" class="${cur ? 'current' : ''}">${c}</button>`;
+      h += `<button data-b="${b}" data-c="${c}" class="${cur ? 'current' : ''}">${esc(chLabel(b, c))}</button>`;
     }
     $('#nav-body').innerHTML = h + '</div>';
     $('#nav-body').scrollTop = 0;
@@ -453,8 +594,8 @@
     list.innerHTML = items.map((bm) => `
       <li>
         <button class="go" data-t="${bm.t}">
-          <div class="ref">${esc(ref(bm))}</div>
-          <div class="snip">${esc(verseText(bm.b, bm.c, bm.v))}</div>
+          <div class="ref">${esc(kjvRef(bm))}</div>
+          <div class="snip">${esc(kjvText(bm.b, bm.c, bm.v))}</div>
         </button>
         <button class="del" data-t="${bm.t}" aria-label="Delete bookmark">✕</button>
       </li>`).join('');
@@ -462,7 +603,7 @@
   }
   $('.ribbon-card').addEventListener('click', closePanels);
   $('#bm-add').addEventListener('click', () => {
-    const r = state.ribbon;
+    const r = toKjv(state.ribbon);   // bookmarks are kept in KJV numbering so they work in every text
     if (state.bookmarks.some((bm) => bm.b === r.b && bm.c === r.c && bm.v === r.v)) {
       toast('Already saved');
       return;
@@ -470,7 +611,7 @@
     state.bookmarks.push({ b: r.b, c: r.c, v: r.v, t: Date.now() });
     touch();
     renderBookmarks();
-    toast(`Saved ${ref(r)}`);
+    toast(`Saved ${ref(state.ribbon)}`);
   });
   $('#bm-list').addEventListener('click', (e) => {
     const btn = e.target.closest('button');
@@ -484,7 +625,8 @@
       renderBookmarks();
     } else {
       closePanels();
-      goTo(bm.b, bm.c, bm.v, true);
+      const p = fromKjv(bm);
+      goTo(p.b, p.c, p.v, true);
     }
   });
 
@@ -612,7 +754,8 @@
     closePanels();
     const [b, c] = CHAPTERS[dayStart(d)];
     state.plan.active = d;
-    goTo(b, c, 1);
+    const p = fromKjv({ b, c, v: 1 });   // plan days are KJV chapters
+    goTo(p.b, p.c, p.v);
     showPlanPill();
   }
   function showPlanPill() {
@@ -777,7 +920,7 @@
     clearHighlight();
     highlight(offset);
 
-    if (useBuiltin()) {
+    if (useBuiltin() && SRC[pos.b] === 'kjv') {   // Daniel's recording is of the KJV
       const key = `${pos.b}:${pos.c}`;
       if (timings.has(key)) {
         if (timings.get(key)) return playAudio(token, pos, offset, timings.get(key));
@@ -876,7 +1019,7 @@
   function setMediaSession() {
     if (!('mediaSession' in navigator) || !player.pos) return;
     try {
-      navigator.mediaSession.metadata = new MediaMetadata({ title: ref(player.pos), artist: 'King James Bible', album: bookName(player.pos.b) });
+      navigator.mediaSession.metadata = new MediaMetadata({ title: ref(player.pos), artist: SRC[player.pos.b] === 'kjv' ? 'King James Bible' : TEXTS[state.settings.text].name, album: bookName(player.pos.b) });
     } catch (e) { /* ignore */ }
   }
   if ('mediaSession' in navigator) {
@@ -899,7 +1042,14 @@
     }
     const full = spoken(verseText(pos.b, pos.c, pos.v));
     const u = new SpeechSynthesisUtterance(full.slice(offset));
-    const voice = currentVoice();
+    let voice = currentVoice();
+    if (isGreek(pos.b)) {
+      voice = synth.getVoices().find((v) => /^el/i.test(v.lang)) || null;
+      if (!voice) {
+        pausePlayer();
+        return toast('No Greek voice on this device. Add one in your device settings, or switch to the English text.');
+      }
+    }
     if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-GB';
     u.rate = state.settings.rate;
     u.pitch = 0.95;
@@ -1133,13 +1283,24 @@
     applySettings();
     try {
       const res = await fetch('data/kjv.json');
-      BIBLE = await res.json();
+      KJV = await res.json();
     } catch (e) {
       $('#loading').textContent = 'Could not load the Bible text. Please check your connection and reload.';
       return;
     }
+    KJV.forEach((book, b) => book[1].forEach((_, i) => CHAPTERS.push([b, i + 1])));
+    buildText('kjv');
+    if (state.settings.text !== 'kjv') {
+      try { await loadText(state.settings.text); } catch (e) { /* offline before first download */ }
+      if (!buildText(state.settings.text)) {
+        state.settings.text = 'kjv';
+        buildText('kjv');
+        applySettings();
+      }
+    }
     $('#loading').remove();
-    BIBLE.forEach((book, b) => book[1].forEach((_, i) => CHAPTERS.push([b, i + 1])));
+    if (!TEXTS[state.ribbonText]) state.ribbonText = 'kjv';
+    syncRibbonText();
     const r = state.ribbon;
     if (!BIBLE[r.b] || r.c > chapterCount(r.b)) state.ribbon = { ...DEFAULTS.ribbon };
     if (state.settings.mode === 'page') setBars(false);
@@ -1156,7 +1317,8 @@
     // The data that follows you between devices. Display settings stay per-device.
     syncData() {
       return {
-        ribbon: state.ribbon,
+        // Shared in KJV numbering so devices reading different texts still agree on the place.
+        ribbon: BIBLE && state.ribbonText === state.settings.text ? toKjv(state.ribbon) : state.ribbon,
         bookmarks: state.bookmarks,
         plan: { start: state.plan.start, done: state.plan.done },
         updatedAt: state.updatedAt,
@@ -1174,10 +1336,10 @@
           state.plan.start = remote.plan.start;
           state.plan.done = sameStart ? { ...state.plan.done, ...remote.plan.done } : { ...remote.plan.done };
         }
-        if ((remote.updatedAt || 0) > state.updatedAt && remote.ribbon) state.ribbon = remote.ribbon;
+        if ((remote.updatedAt || 0) > state.updatedAt && remote.ribbon) { state.ribbon = remote.ribbon; state.ribbonText = 'kjv'; }
         state.updatedAt = Date.now();
       } else {
-        if (remote.ribbon) state.ribbon = remote.ribbon;
+        if (remote.ribbon) { state.ribbon = remote.ribbon; state.ribbonText = 'kjv'; }
         state.bookmarks = remote.bookmarks || [];
         state.plan.start = remote.plan ? remote.plan.start : null;
         state.plan.done = (remote.plan && remote.plan.done) || {};
@@ -1186,6 +1348,7 @@
       state.syncUid = uid;
       save();
       if (!BIBLE) return first;
+      syncRibbonText();
       const r = state.ribbon;
       if (r.b !== before.b || r.c !== before.c || r.v !== before.v) {
         const held = syncHold;

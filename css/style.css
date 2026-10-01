@@ -290,3 +290,14 @@ body.playing #pagefoot { display: none; }
 /* "Verse only" highlighting: keep the verse shaded, don't mark each word. */
 body.follow-verse .w.now { background: none; box-shadow: none; }
 body.follow-verse .v.reading { background: var(--flash); }
+
+/* ---------- Septuagint / other texts ---------- */
+.with-under .v { display: block; }
+.with-under p.para { text-indent: 0; }
+.kjv-under {
+  display: block; font-size: .74em; line-height: 1.45; color: var(--muted);
+  margin: .2em 0 .85em; padding-left: .7em; border-left: 2px solid var(--rule);
+}
+.kjv-under .kref { font-size: .85em; margin-right: .35em; font-variant-numeric: tabular-nums; }
+.kjv-under.none { font-style: italic; }
+#set-text button { padding: 8px 9px; }
