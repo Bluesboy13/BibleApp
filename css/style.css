@@ -360,3 +360,7 @@ body.theme-night { --hl-yellow: rgba(255, 204, 0, .25); --hl-green: rgba(76, 175
 body.playing #versebar { bottom: calc(84px + env(safe-area-inset-bottom)); }
 .hl-list .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; margin-left: 6px; border: 1px solid var(--rule); }
 .swatch.hl-yellow, .dot.hl-yellow { background: #f2c94c; } .swatch.hl-green, .dot.hl-green { background: #6fbf73; } .swatch.hl-blue, .dot.hl-blue { background: #6fa3ef; } .swatch.hl-pink, .dot.hl-pink { background: #ec7aa0; }
+
+.pbtn.mute svg { fill: none; stroke-width: 1.6; }
+.pbtn.mute svg path:first-child { fill: currentColor; }
+.pbtn.mute.on { color: var(--accent); background: var(--hover); }

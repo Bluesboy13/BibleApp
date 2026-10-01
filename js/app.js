@@ -423,8 +423,13 @@
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') return closePanels();
+    // Space works the play/pause button (except while typing in a box).
+    if (e.key === ' ' && !e.target.closest('input, textarea, select')) {
+      e.preventDefault();
+      return playPause();
+    }
     if (state.settings.mode !== 'page' || anyPanelOpen()) return;
-    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); nextPage(); }
+    if (['ArrowRight', 'PageDown'].includes(e.key)) { e.preventDefault(); nextPage(); }
     if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); prevPage(); }
   });
 
@@ -991,6 +996,7 @@
     gotBoundary: false,
     estTimer: 0,
     wakeLock: null,
+    muted: false,      // reading silently (still highlighting and scrolling)
   };
   const RATES = [0.75, 0.9, 1, 1.1, 1.25];
   // Voices that suit a mature British reader, best first.
@@ -1143,7 +1149,7 @@
     const go = () => {
       if (token !== player.token) return;
       try { audio.currentTime = at; } catch (e) { /* not seekable yet */ }
-      audio.muted = false;
+      audio.muted = player.muted;
       audio.play().catch(() => { if (token === player.token) { pausePlayer(); toast('Tap play to start.'); } });
     };
     if (audio.readyState >= 1) go(); else audio.addEventListener('loadedmetadata', go, { once: true });
@@ -1224,6 +1230,7 @@
     if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-GB';
     u.rate = state.settings.rate;
     u.pitch = 0.95;
+    u.volume = player.muted ? 0 : 1;
     player.gotBoundary = false;
     u.onboundary = (e) => {
       if (token !== player.token) return;
@@ -1337,6 +1344,7 @@
   }
   function stopPlayer() {
     pausePlayer();
+    setMuted(false);   // next time, start with sound
     clearHighlight();
     player.active = false;
     document.body.classList.remove('playing');
@@ -1375,10 +1383,29 @@
     if (document.visibilityState === 'hidden' && player.playing && player.engine === 'device') pausePlayer();
   });
 
-  $('#btn-play').addEventListener('click', () => {
+  function playPause() {
     if (!player.active) startPlayer();
     else if (player.playing) pausePlayer();
     else resumePlayer();
+  }
+  $('#btn-play').addEventListener('click', playPause);
+  // Mute keeps reading (highlighting and turning pages) without sound, e.g. to read along quietly.
+  function setMuted(m) {
+    player.muted = m;
+    audio.muted = m;
+    const btn = $('#player-mute');
+    btn.classList.toggle('on', m);
+    btn.setAttribute('aria-pressed', String(m));
+    btn.setAttribute('aria-label', m ? 'Turn sound on' : 'Mute (keep reading)');
+    btn.innerHTML = m
+      ? '<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>';
+  }
+  $('#player-mute').addEventListener('click', () => {
+    setMuted(!player.muted);
+    // A device voice can't change volume mid-sentence: restart the verse at the current word.
+    if (player.playing && player.engine === 'device') speakFrom(player.pos, player.word);
+    toast(player.muted ? 'Muted · still reading' : 'Sound on');
   });
   $('#player-toggle').addEventListener('click', () => (player.playing ? pausePlayer() : resumePlayer()));
   $('#player-prev').addEventListener('click', () => { requestWake(); prevVerse(); });
