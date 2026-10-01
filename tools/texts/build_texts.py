@@ -49,7 +49,7 @@ def clean_usfm(t):
     t = re.sub(r"\\f .*?\\f\*", "", t)
     t = re.sub(r"\\x .*?\\x\*", "", t)
     t = re.sub(r"\\\+?[a-z0-9]+\*?", " ", t)
-    return " ".join(t.split())
+    return " ".join(t.split()).replace("[ ", "[")
 
 
 def parse_brenton_en(d, codes=OT_CODES):
@@ -59,27 +59,32 @@ def parse_brenton_en(d, codes=OT_CODES):
         src = open(f, encoding="utf-8-sig").read()
         src = re.sub(r"\\vp (.*?)\\vp\*", lambda m: "\\vlabel " + m.group(1).strip() + " ", src)
         chapters, cur, para = collections.OrderedDict(), None, False
-        verse = None
+        verse, heading, lead = None, False, ""
         for tok in re.split(r"(\\c \S+|\\v \S+|\\p\b|\\m\b|\\nb\b|\\d\b|\\vlabel \S+)", src):
             if not tok:
                 continue
             if tok.startswith("\\c "):
                 cur = tok[3:].strip()
                 chapters[cur] = []
-                verse = None
+                verse, lead = None, ""
             elif tok.startswith("\\v "):
-                verse = [tok[3:].strip(), "", para]
-                para = False
+                # Text before a chapter's first verse (Lamentations' opening line) belongs to verse 1.
+                verse = [tok[3:].strip(), lead, para]
+                para, heading, lead = False, False, ""
                 chapters[cur].append(verse)
             elif tok.startswith("\\vlabel "):
                 if verse is not None:
                     verse[0] = tok[8:].strip()
             elif tok in ("\\p",):
-                para = True
-            elif tok in ("\\m", "\\nb", "\\d"):
+                para, heading = True, False
+            elif tok == "\\d":
+                heading = True    # a heading such as Sirach's "The Prologue...", not Scripture text
+            elif tok in ("\\m", "\\nb"):
                 pass
             elif verse is not None:
                 verse[1] += " " + tok
+            elif cur is not None and not heading:
+                lead += " " + tok
         books[code] = collections.OrderedDict(
             (c, [(lab, clean_usfm(txt), p) for lab, txt, p in vs if clean_usfm(txt)])
             for c, vs in chapters.items() if c not in SKIP_CHAPTERS.get(code, ()))
@@ -99,6 +104,8 @@ def parse_brenton_gr(d, codes=OT_CODES):
         if name is None:
             continue
         src = open(os.path.join(d, f"{code}_src.tex"), encoding="utf-8-sig").read()
+        # An introductory paragraph before chapter 1 (Lamentations' opening line) belongs to verse 1.
+        intro = re.search(r"\\IP\s+(.*?)\s*(?:\\par|\})", src, re.S)
         chapters, cur, verse, para = collections.OrderedDict(), None, None, False
         for tok in re.split(r"(\\(?:ChapOne|Chap|PsalmChap)\{[^}]*\}|\\OneChap\b|\\(?:VerseOne|VS)\{[^}]*\}|\\PP\b)", src):
             if not tok:
@@ -111,7 +118,7 @@ def parse_brenton_gr(d, codes=OT_CODES):
                 continue
             m = re.match(r"\\(?:VerseOne|VS)\{([^}]*)\}", tok)
             if m:
-                verse = [m.group(1), "", para]
+                verse = [m.group(1), intro.group(1) + " " if intro and not any(chapters.values()) else "", para]
                 para = False
                 chapters[cur].append(verse)
             elif tok == "\\PP":
@@ -330,7 +337,9 @@ def main():
     # Match Brenton's English to the KJV, then give each text a map by Brenton's chapter:verse labels.
     sims = []
     for b in range(39):
-        m, s_ = align(kjv[b][1], [[t.lstrip("¶") for t in vs] for vs in en_p["books"][b]])
+        # (Lamentations opens with a bracketed line, "[And it came to pass...]", that the KJV lacks.)
+        lead = lambda t, vi: re.sub(r"^\[[^\]]*\]\s*", "", t) if vi == 0 and b == 24 else t
+        m, s_ = align(kjv[b][1], [[lead(t.lstrip("¶"), vi) for vi, t in enumerate(vs)] for vs in en_p["books"][b]])
         sims += s_
         by_label = {key: m[ci][vi] for ci, ch in enumerate(en_keys[b]) for vi, key in enumerate(ch)}
         en_p.setdefault("map", {})[b] = m
