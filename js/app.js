@@ -1015,7 +1015,7 @@
   // voice, in the same layout (books 67-80 are the extra Septuagint books).
   const RECORDINGS = {
     kjv: { bases: AUDIO_BASES, speed: AUDIO_SPEED },
-    el: { bases: ['https://bluesboy13.github.io/BibleApp-audio-greek/'], speed: 1 },
+    el: { bases: ['https://freebiblos.github.io/BibleApp-audio-el/'], speed: 1 },
   };
   // Which recording reads this book, if any: Daniel for the KJV (when he's the chosen voice),
   // the Greek voice for Greek text whatever English voice is chosen.
