@@ -204,7 +204,7 @@
     const poetry = isPoetry(b, c);
     const under = state.settings.under && SRC[b] !== 'kjv' && (!isExtra(b) || (MAP[b] && APOC));
     const lang = langOf(b);
-    let h = `<section class="chapter${poetry ? ' poetry' : ''}${under ? ' with-under' : ''}" data-c="${c}" lang="${lang}"${lang === 'he' ? ' dir="rtl"' : ''}>`;
+    let h = `<section class="chapter${poetry ? ' poetry' : ''}${under ? ' with-under' : ''}" data-b="${b}" data-c="${c}" lang="${lang}"${lang === 'he' ? ' dir="rtl"' : ''}>`;
     h += `<p><span class="dropcap">${esc(chLabel(b, c))}</span>`;
     verses.forEach((t, i) => {
       // ¶ marks a paragraph break in the text; start a new paragraph there in prose.
@@ -214,7 +214,7 @@
       }
       const label = vLabel(b, c, i + 1);
       const hl = highlightOf(b, c, i + 1);
-      h += `<span class="v${i === 0 ? ' first' : ''}${hl ? ' hl hl-' + hl : ''}" data-c="${c}" data-v="${i + 1}"><sup class="vn">${esc(label)}</sup>${esc(t)} </span>`;
+      h += `<span class="v${i === 0 ? ' first' : ''}${hl ? ' hl hl-' + hl : ''}" data-b="${b}" data-c="${c}" data-v="${i + 1}"><sup class="vn">${esc(label)}</sup>${esc(t)} </span>`;
       if (under) h += kjvUnderHTML(b, c, i + 1);
     });
     return h + '</p></section>';
@@ -231,35 +231,86 @@
     return '<span class="kjv-under" lang="en" dir="ltr">' + refs.map(([kc, kv]) =>
       `<span class="kref">${MAP[b] ? `${chap(kc)}:${kv}` : ''}</span>${esc(kjvText(b, kc, kv))}`).join(' ') + '</span>';
   }
-  function bookNavHTML(b) {
-    const prev = b > 0 ? `<button data-book="${b - 1}">‹ ${esc(bookName(b - 1))}</button>` : '<span></span>';
-    const next = b < BIBLE.length - 1 ? `<button data-book="${b + 1}">${esc(bookName(b + 1))} ›</button>` : '<span></span>';
-    return `<div class="book-end">❧</div><nav class="book-nav">${prev}${next}</nav>`;
-  }
-
   // ---------- Scroll mode ----------
   const bookEl = $('#book');
-  let renderedBook = -1;
+  // Books follow one another as you scroll: the next book is added before you reach the end of
+  // this one, and the oldest is dropped once a few are on the page.
+  let renderedBook = -1;   // the book the scroll view was opened at (-1: needs a fresh render)
+  let renderedBooks = [];  // books currently on the page, in order
   let verseEls = [];
 
-  function renderBook(b) {
-    let h = titleHTML(b);
+  function bookHTML(b) {
+    let h = `<div class="bk" data-b="${b}">` + titleHTML(b);
     for (let c = 1; c <= chapterCount(b); c++) h += chapterHTML(b, c);
-    bookEl.innerHTML = h + bookNavHTML(b);
+    return h + '<div class="book-end">❧</div></div>';
+  }
+  function renderBook(b) {
+    bookEl.innerHTML = bookHTML(b);
     renderedBook = b;
+    renderedBooks = [b];
     verseEls = Array.from(bookEl.querySelectorAll('.v'));
+  }
+  function appendNextBook() {
+    const last = renderedBooks[renderedBooks.length - 1];
+    if (last >= BIBLE.length - 1) return;
+    bookEl.insertAdjacentHTML('beforeend', bookHTML(last + 1));
+    renderedBooks.push(last + 1);
+    verseEls = Array.from(bookEl.querySelectorAll('.v'));
+  }
+  // Keep the page light: once scrolling has stopped (moving the page mid-swipe would make it jump),
+  // drop books that are well above the screen.
+  let trimTimer = 0;
+  function trimBooks() {
+    if (state.settings.mode !== 'scroll' || player.playing) return;
+    let first = bookEl.querySelector('.bk');
+    while (renderedBooks.length > 2 && first.getBoundingClientRect().bottom < -window.innerHeight) {
+      // Hold the book being read in place, whether or not the browser adjusts the scroll itself.
+      const anchor = bookEl.querySelector(`.bk[data-b="${renderedBooks[renderedBooks.length - 1]}"]`);
+      const top = anchor.getBoundingClientRect().top;
+      first.remove();
+      renderedBooks.shift();
+      window.scrollBy(0, anchor.getBoundingClientRect().top - top);
+      first = bookEl.querySelector('.bk');
+    }
+    let last = bookEl.querySelector('.bk:last-child');
+    while (renderedBooks.length > 2 && last.getBoundingClientRect().top > window.innerHeight * 3) {
+      last.remove();
+      renderedBooks.pop();
+      last = bookEl.querySelector('.bk:last-child');
+    }
+    lastY = window.scrollY;
+    verseEls = Array.from(bookEl.querySelectorAll('.v'));
+  }
+  // Scrolling up past the start of a book brings in the one before it, keeping the page still.
+  function prependPrevBook() {
+    const first = renderedBooks[0];
+    if (first <= 0) return;
+    const anchor = bookEl.querySelector('.bk');
+    const top = anchor.getBoundingClientRect().top;
+    anchor.insertAdjacentHTML('beforebegin', bookHTML(first - 1));
+    renderedBooks.unshift(first - 1);
+    window.scrollBy(0, anchor.getBoundingClientRect().top - top);
+    lastY = window.scrollY;
+    verseEls = Array.from(bookEl.querySelectorAll('.v'));
+  }
+  function maybeAppend() {
+    if (state.settings.mode !== 'scroll' || renderedBook < 0) return;
+    if (window.scrollY + window.innerHeight * 3 > document.documentElement.scrollHeight) appendNextBook();
+    if (window.scrollY < window.innerHeight * 2) prependPrevBook();
+    clearTimeout(trimTimer);
+    if (renderedBooks.length > 3) trimTimer = setTimeout(trimBooks, 1500);
   }
 
   const topOffset = () => $('#topbar').offsetHeight + 10;
 
-  function scrollToVerse(c, v) {
+  function scrollToVerse(b, c, v) {
     let y = 0;
-    if (!(c === 1 && v <= 1)) {
-      const el = v <= 1
-        ? bookEl.querySelector(`.chapter[data-c="${c}"]`)
-        : bookEl.querySelector(`.v[data-c="${c}"][data-v="${v}"]`);
-      if (el) y = el.getBoundingClientRect().top + window.scrollY - topOffset();
-    }
+    const el = c === 1 && v <= 1
+      ? bookEl.querySelector(`.bk[data-b="${b}"]`)
+      : v <= 1
+        ? bookEl.querySelector(`.chapter[data-b="${b}"][data-c="${c}"]`)
+        : bookEl.querySelector(`.v[data-b="${b}"][data-c="${c}"][data-v="${v}"]`);
+    if (el && !(b === renderedBooks[0] && c === 1 && v <= 1)) y = el.getBoundingClientRect().top + window.scrollY - topOffset();
     window.scrollTo(0, Math.max(0, y));
     lastY = window.scrollY; // a jump shouldn't hide the top bar
   }
@@ -280,7 +331,7 @@
       if (prev.bottom > y + lh * 2 || verseEls[ans].getClientRects()[0].top > window.innerHeight) ans--;
     }
     const el = verseEls[ans];
-    return { b: renderedBook, c: +el.dataset.c, v: +el.dataset.v };
+    return { b: +el.dataset.b, c: +el.dataset.c, v: +el.dataset.v };
   }
 
   let lastY = 0, ticking = false;
@@ -295,14 +346,13 @@
         else if (y < lastY - 12) setBars(true);
       }
       lastY = y;
+      maybeAppend();
       const p = scrollPosition();
       if (p && !player.playing) setRibbon(p);   // while reading aloud, the voice sets the place
     });
   }, { passive: true });
 
   bookEl.addEventListener('click', (e) => {
-    const nb = e.target.closest('[data-book]');
-    if (nb) { goTo(+nb.dataset.book, 1, 1); return; }
     if (window.getSelection && String(window.getSelection())) return;
     tapText(e);
   });
@@ -456,8 +506,9 @@
     if (state.settings.mode === 'page') {
       pageGoTo(b, c, v);
     } else {
-      if (renderedBook !== b) renderBook(b);
-      scrollToVerse(c, v);
+      if (renderedBook < 0 || !renderedBooks.includes(b)) renderBook(b);
+      scrollToVerse(b, c, v);
+      maybeAppend();
     }
     updateTitle();
     if (moved) touch(); else save();
@@ -466,7 +517,7 @@
   }
   function flashVerse(c, v) {
     const root = state.settings.mode === 'page' ? flow : bookEl;
-    const el = root.querySelector(`.v[data-c="${c}"][data-v="${v}"]`);
+    const el = root.querySelector(`.v[data-b="${state.ribbon.b}"][data-c="${c}"][data-v="${v}"]`);
     if (!el) return;
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1600);
@@ -567,9 +618,7 @@
   let selected = null;   // { el, b, c, v }
   function openVerseBar(el) {
     closeVerseBar();
-    const root = el.closest('#flow') ? 'page' : 'scroll';
-    const b = root === 'page' ? pg.b : renderedBook;
-    selected = { el, b, c: +el.dataset.c, v: +el.dataset.v };
+    selected = { el, b: +el.dataset.b, c: +el.dataset.c, v: +el.dataset.v };
     el.classList.add('selected');
     $('#versebar-ref').textContent = ref(selected);
     const cur = highlightOf(selected.b, selected.c, selected.v);
@@ -598,7 +647,7 @@
       };
     }
     // Update every copy of this verse on screen (scroll and page views).
-    document.querySelectorAll(`.v[data-c="${c}"][data-v="${v}"]`).forEach((x) => {
+    document.querySelectorAll(`.v[data-b="${b}"][data-c="${c}"][data-v="${v}"]`).forEach((x) => {
       x.classList.remove('hl', ...HL_COLORS.map((h) => 'hl-' + h));
       if (color) x.classList.add('hl', 'hl-' + color);
     });
@@ -1036,7 +1085,7 @@
   }
 
   function readerRoot() { return state.settings.mode === 'page' ? flow : bookEl; }
-  function verseEl(p) { return readerRoot().querySelector(`.v[data-c="${p.c}"][data-v="${p.v}"]`); }
+  function verseEl(p) { return readerRoot().querySelector(`.v[data-b="${p.b}"][data-c="${p.c}"][data-v="${p.v}"]`); }
 
   // Split the verse into word spans (only for the verse being read).
   function wrapVerse(el, text) {
