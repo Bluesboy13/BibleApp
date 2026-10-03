@@ -51,6 +51,15 @@
     ['sq', 'Shqip (Albanian)', 'Bibla', 'Bibla', 'sq'],
     ['mi', 'Māori', 'Paipera Tapu', 'Paipera', 'mi'],
     ['mg-1865', 'Malagasy', 'Baiboly 1865', '1865', 'mg'],
+    ['it-dio', 'Italiano (Italian)', 'Diodati 1885', 'Diodati', 'it'],
+    ['ar-vd', 'العربية (Arabic)', 'فاندايك (Van Dyck)', 'فاندايك', 'ar'],
+    ['ko', '한국어 (Korean)', '한국어 성경', '성경', 'ko'],
+    ['fa-opv', 'فارسی (Persian)', 'ترجمه قدیم', 'قدیم', 'fa'],
+    ['uk-kul', 'Українська (Ukrainian)', 'Куліш і Пулюй 1905', 'Куліш', 'uk'],
+    ['pt-bpm', 'Português (Portuguese)', 'Bíblia Portuguesa Mundial', 'BPM', 'pt'],
+    ['ht', 'Kreyòl ayisyen (Haitian Creole)', 'Bib La', 'Bib La', 'ht'],
+    ['haw', 'ʻŌlelo Hawaiʻi (Hawaiian)', 'Baibala Hemolele 1868', '1868', 'haw'],
+    ['to', 'Lea faka-Tonga (Tongan)', 'Ko e Tohi Tapu', 'Tohi Tapu', 'to'],
   ];
   LANG_TEXTS.forEach(([id, group, name, short, lang]) => { TEXTS[id] = { name, short, file: `data/texts/${id}.json`, lang, group }; });
   let APOC = null;           // the KJV's Apocrypha, for "KJV underneath" in the Septuagint's extra books

@@ -7,7 +7,8 @@ Output shape matches the other texts: {"books": {kjvIndex: [[verse, ...] per cha
 "labels"/"map" for books whose chapters or verses don't line up with the KJV's, so places,
 bookmarks and "KJV underneath" still work.
 
-Usage: python build_langs.py SCROLLMAPPER_JSON_DIR OPEN_BIBLES_DIR [id ...]
+  eBible.org                    <id>_usfx.zip, unzipped to <id>/<id>_usfx.xml
+Usage: python build_langs.py SCROLLMAPPER_JSON_DIR OPEN_BIBLES_DIR EBIBLE_DIR [id ...]
 """
 import json
 import os
@@ -48,6 +49,16 @@ TEXTS = {
     "sq": ("ob", "sqi-albanian.osis.xml", "sq", "Bibla"),
     "mi": ("ob", "mri-maori.osis.xml", "mi", "Paipera Tapu"),
     "mg-1865": ("sm", "Mg1865", "mg", "Baiboly 1865"),
+    # From eBible.org (fetched by the BibleApp-audio repo's ebible workflow), <id>/<id>_usfx.xml
+    "it-dio": ("eb", "ita1885", "it", "Diodati 1885"),
+    "ar-vd": ("eb", "arb-vd", "ar", "فاندايك (Van Dyck)"),
+    "ko": ("eb", "kor", "ko", "한국어 성경"),
+    "fa-opv": ("eb", "pesOPV", "fa", "ترجمه قدیم"),
+    "uk-kul": ("eb", "ukr1871", "uk", "Куліш і Пулюй 1905"),
+    "pt-bpm": ("eb", "porbrbsl", "pt", "Bíblia Portuguesa Mundial"),
+    "ht": ("eb", "hat", "ht", "Bib La"),
+    "haw": ("eb", "haw1868", "haw", "Baibala Hemolele 1868"),
+    "to": ("eb", "ton", "to", "Ko e Tohi Tapu"),
 }
 
 OSIS = ("Gen Exod Lev Num Deut Josh Judg Ruth 1Sam 2Sam 1Kgs 2Kgs 1Chr 2Chr Ezra Neh Esth Job Ps Prov Eccl "
@@ -113,16 +124,24 @@ def load_osis(path):
 def load_usfx(path):
     src = open(path, encoding="utf-8-sig").read()
     src = re.sub(r"<f\b.*?</f>|<x\b.*?</x>|<fe\b.*?</fe>", "", src, flags=re.S)
+    # Headings added by editors (section titles, "Psalm 1", "Book 1"), not Scripture.
+    src = re.sub(r"<s\b[^>]*>.*?</s>|<cl>.*?</cl>|<toc\b.*?</toc>|<h>.*?</h>|<id\b.*?</id>|"
+                 r"<p [^>]*sfm=\"(?:ms|mr|mt\d?|r|s\d?|sp)\"[^>]*>.*?</p>", "", src, flags=re.S)
     books = {}
     for m in re.finditer(r'<book id="(\w+)"(.*?)</book>', src, re.S):
         if m.group(1) not in USFM:
             continue
         b = USFM.index(m.group(1))
         chs = {}
-        for cm in re.finditer(r'<c id="(\d+)"\s*/>(.*?)(?=<c id=|$)', m.group(2), re.S):
+        for cm in re.finditer(r'<c id="(\d+)"[^>]*/>(.*?)(?=<c id=|$)', m.group(2), re.S):
             vs = []
-            for vm in re.finditer(r'<v id="(\d+)[^"]*"\s*/>(.*?)(?=<v id=|<ve\s*/>|$)', cm.group(2), re.S):
+            # A psalm's title (<d>) comes before verse 1: it opens verse 1.
+            pre = cm.group(2).split("<v id=", 1)[0]
+            title = " ".join(clean(d) for d in re.findall(r"<d\b[^>]*>(.*?)</d>", pre, re.S))
+            for vm in re.finditer(r'<v id="(\d+)[^"]*"[^>]*/>(.*?)(?=<v id=|<ve\s*/>|$)', cm.group(2), re.S):
                 vs.append((int(vm.group(1)), clean(vm.group(2))))
+            if title and vs:
+                vs[0] = (vs[0][0], title + " " + vs[0][1])
             chs[int(cm.group(1))] = vs
         books[b] = [chs[c] for c in sorted(chs)]
     return books
@@ -188,8 +207,8 @@ def check(tid, res, kjv):
 
 
 def main():
-    sm_dir, ob_dir = sys.argv[1], sys.argv[2]
-    only = sys.argv[3:]
+    sm_dir, ob_dir, eb_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+    only = sys.argv[4:]
     kjv = json.load(open(os.path.join(DATA, "kjv.json"), encoding="utf-8"))
     os.makedirs(os.path.join(DATA, "texts"), exist_ok=True)
     for tid, (src, f, lang, name) in TEXTS.items():
@@ -197,6 +216,8 @@ def main():
             continue
         if src == "sm":
             books = load_sm(os.path.join(sm_dir, f + ".json"), kjv)
+        elif src == "eb":
+            books = load_usfx(os.path.join(eb_dir, f, f + "_usfx.xml"))
         elif f.endswith(".osis.xml"):
             books = load_osis(os.path.join(ob_dir, f))
         else:
