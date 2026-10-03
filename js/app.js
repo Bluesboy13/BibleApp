@@ -15,11 +15,44 @@
   let CHAPTERS = [];         // flat list of [b, c] for the reading plan (KJV chapters)
   // Alternative texts. Old Testament books come from the text's file; New Testament books from `nt`.
   const TEXTS = {
-    kjv: { name: 'KJV', short: '' },
+    kjv: { name: 'King James Version (KJV)', short: '' },
     'lxx-gr': { name: 'Septuagint (Greek)', short: 'LXX', file: 'data/lxx-gr.json', nt: 'data/tr.json', apoc: 'data/kjv-apocrypha.json', lang: 'el' },
     'lxx-en': { name: 'Septuagint (Brenton English)', short: 'LXX', file: 'data/lxx-en.json', apoc: 'data/kjv-apocrypha.json', lang: 'en' },
     wlc: { name: 'Hebrew (Westminster Leningrad Codex)', short: 'Hebrew', file: 'data/wlc.json', nt: 'data/tr.json', lang: 'he' },
   };
+  // Bibles in other languages (public domain), grouped by language in the Text menu.
+  // [id, language, name, short name for the title bar, language code]
+  const LANG_TEXTS = [
+    ['de-elb', 'Deutsch (German)', 'Elberfelder 1905', 'Elberfelder', 'de'],
+    ['de-lut', 'Deutsch (German)', 'Luther 1912', 'Luther 1912', 'de'],
+    ['es-rv', 'Español (Spanish)', 'Reina-Valera 1909', 'RV 1909', 'es'],
+    ['fr-mar', 'Français (French)', 'Martin 1744', 'Martin', 'fr'],
+    ['it-riv', 'Italiano (Italian)', 'Riveduta 1927', 'Riveduta', 'it'],
+    ['tl-ab', 'Tagalog', 'Ang Biblia 1905', 'Ang Biblia', 'tl'],
+    ['zh-cuv', '中文 (Chinese)', '和合本 (简体)', '和合本', 'zh-Hans'],
+    ['zh-cuvt', '中文 (Chinese)', '和合本 (繁體)', '和合本', 'zh-Hant'],
+    ['ru-syn', 'Русский (Russian)', 'Синодальный перевод', 'Синодальный', 'ru'],
+    ['nl-sv', 'Nederlands (Dutch)', 'Statenvertaling', 'SV', 'nl'],
+    ['pl-gd', 'Polski (Polish)', 'Biblia Gdańska', 'Gdańska', 'pl'],
+    ['hu-kar', 'Magyar (Hungarian)', 'Károli 1908', 'Károli', 'hu'],
+    ['cs-bkr', 'Čeština (Czech)', 'Bible kralická', 'BKR', 'cs'],
+    ['sv-1917', 'Svenska (Swedish)', 'Bibeln 1917', '1917', 'sv'],
+    ['no-1930', 'Norsk (Norwegian)', 'Bibelen 1930', '1930', 'nb'],
+    ['da-1871', 'Dansk (Danish)', 'Bibelen 1871/1907', '1871', 'da'],
+    ['fi-1776', 'Suomi (Finnish)', 'Biblia 1776', '1776', 'fi'],
+    ['ja-kougo', '日本語 (Japanese)', '口語訳', '口語訳', 'ja'],
+    ['vi-1934', 'Tiếng Việt (Vietnamese)', 'Kinh Thánh 1934', '1934', 'vi'],
+    ['th', 'ไทย (Thai)', 'พระคัมภีร์ไทย', 'ไทย', 'th'],
+    ['bg', 'Български (Bulgarian)', 'Библия', 'Библия', 'bg'],
+    ['el-vam', 'Ελληνικά (Modern Greek)', 'Βάμβας 1850', 'Βάμβας', 'el'],
+    ['ml-1910', 'മലയാളം (Malayalam)', 'സത്യവേദപുസ്തകം 1910', '1910', 'ml'],
+    ['my-jud', 'မြန်မာ (Burmese)', 'Judson 1835', 'Judson', 'my'],
+    ['sr-dk', 'Српски (Serbian)', 'Даничић-Караџић', 'ДК', 'sr'],
+    ['sq', 'Shqip (Albanian)', 'Bibla', 'Bibla', 'sq'],
+    ['mi', 'Māori', 'Paipera Tapu', 'Paipera', 'mi'],
+    ['mg-1865', 'Malagasy', 'Baiboly 1865', '1865', 'mg'],
+  ];
+  LANG_TEXTS.forEach(([id, group, name, short, lang]) => { TEXTS[id] = { name, short, file: `data/texts/${id}.json`, lang, group }; });
   let APOC = null;           // the KJV's Apocrypha, for "KJV underneath" in the Septuagint's extra books
   const loadedTexts = {};    // file -> parsed JSON
   // Per book, for the text on screen: where it came from, printed chapter/verse labels, and its
@@ -86,7 +119,8 @@
   const ref = (p) => `${bookName(p.b)} ${chLabel(p.b, p.c)}:${vLabel(p.b, p.c, p.v)}`;
   const kjvRef = (p) => `${KJV[p.b][0]} ${p.c}:${p.v}`;
   // Language of a book in the text on screen: Hebrew, Greek or English.
-  const langOf = (b) => (SRC[b] === 'wlc' ? 'he' : SRC[b] === 'lxx-gr' || SRC[b] === 'tr' ? 'el' : 'en');
+  const langOf = (b) => (SRC[b] === 'tr' ? 'el' : (TEXTS[SRC[b]] || {}).lang || 'en');
+  const isRtl = (lang) => /^(he|ar|fa|ur)/.test(lang);
 
   // ----- Moving between a text's numbering and the KJV's -----
   const isExtra = (b) => b >= 66;
@@ -207,7 +241,7 @@
     const poetry = isPoetry(b, c);
     const under = state.settings.under && SRC[b] !== 'kjv' && (!isExtra(b) || (MAP[b] && APOC));
     const lang = langOf(b);
-    let h = `<section class="chapter${poetry ? ' poetry' : ''}${under ? ' with-under' : ''}" data-b="${b}" data-c="${c}" lang="${lang}"${lang === 'he' ? ' dir="rtl"' : ''}>`;
+    let h = `<section class="chapter${poetry ? ' poetry' : ''}${under ? ' with-under' : ''}" data-b="${b}" data-c="${c}" lang="${lang}"${isRtl(lang) ? ' dir="rtl"' : ''}>`;
     h += `<p><span class="dropcap">${esc(chLabel(b, c))}</span>`;
     verses.forEach((t, i) => {
       // ¶ marks a paragraph break in the text; start a new paragraph there in prose.
@@ -550,7 +584,8 @@
     document.documentElement.style.setProperty('--size', s.size + 'px');
     document.querySelector('meta[name="theme-color"]').content = THEME_COLORS[s.theme];
     $('#btn-vn').setAttribute('aria-pressed', String(s.vn));
-    for (const [id, val] of [['#set-font', s.font], ['#set-theme', s.theme], ['#set-align', s.align], ['#set-text', s.text], ['#set-under', s.under ? 'on' : 'off'], ['#set-follow', s.follow], ['#set-mode', s.mode], ['#set-vn', s.vn ? 'on' : 'off']]) {
+    if ($('#set-text').value !== s.text) $('#set-text').value = s.text;
+    for (const [id, val] of [['#set-font', s.font], ['#set-theme', s.theme], ['#set-align', s.align], ['#set-under', s.under ? 'on' : 'off'], ['#set-follow', s.follow], ['#set-mode', s.mode], ['#set-vn', s.vn ? 'on' : 'off']]) {
       $(id).querySelectorAll('button').forEach((btn) => btn.classList.toggle('on', btn.dataset.v === val));
     }
   }
@@ -579,14 +614,29 @@
   $('#set-theme').addEventListener('click', (e) => e.target.dataset.v && changeSetting('theme', e.target.dataset.v));
   $('#set-align').addEventListener('click', (e) => e.target.dataset.v && changeSetting('align', e.target.dataset.v));
   $('#set-under').addEventListener('click', (e) => e.target.dataset.v && changeSetting('under', e.target.dataset.v === 'on'));
-  $('#set-text').addEventListener('click', (e) => e.target.dataset.v && changeText(e.target.dataset.v));
+  // The Text menu: the KJV and original-language texts first, then other languages.
+  function fillTexts() {
+    const sel = $('#set-text');
+    const opt = (id) => `<option value="${id}">${esc(TEXTS[id].name)}</option>`;
+    let h = `<optgroup label="English &amp; original languages">${['kjv', 'lxx-en', 'lxx-gr', 'wlc'].map(opt).join('')}</optgroup>`;
+    const groups = {};
+    LANG_TEXTS.forEach(([id, group]) => (groups[group] = groups[group] || []).push(id));
+    Object.keys(groups).sort((a, z) => a.localeCompare(z)).forEach((g) => { h += `<optgroup label="${esc(g)}">${groups[g].map(opt).join('')}</optgroup>`; });
+    sel.innerHTML = h;
+    sel.value = state.settings.text;
+  }
+  fillTexts();
+  $('#set-text').addEventListener('change', (e) => changeText(e.target.value));
   // Switch between the KJV and the Septuagint, keeping the reader's place.
   async function changeText(id) {
     if (id === state.settings.text || !KJV) return;
     const t = TEXTS[id];
     if ((t.file && !loadedTexts[t.file]) || (t.nt && !loadedTexts[t.nt])) {
       toast(`Loading ${t.name}…`);
-      try { await loadText(id); } catch (e) { return toast('Couldn’t load that text. Check your connection.'); }
+      try { await loadText(id); } catch (e) {
+        $('#set-text').value = state.settings.text;
+        return toast('Couldn’t load that text. Check your connection.');
+      }
     }
     if (player.active) stopPlayer();
     const k = toKjv(state.ribbon);
@@ -1274,6 +1324,18 @@
 
   // ----- Device speech voices -----
   let fallbackNoted = false;
+  // The device's voice for a text's language (e.g. "es" -> an es-ES/es-MX voice).
+  function voiceFor(lang) {
+    const base = lang.split('-')[0];
+    const alt = { he: '(he|iw)', nb: '(nb|no)', no: '(nb|no)' }[base] || base;
+    const vs = synth.getVoices().filter((v) => new RegExp('^' + alt + '([-_]|$)', 'i').test(v.lang));
+    // Chinese: traditional text prefers a Taiwan/Hong Kong voice, simplified a mainland one.
+    const prefer = lang === 'zh-Hant' ? /TW|HK/i : lang === 'zh-Hans' ? /CN/i : null;
+    return (prefer && vs.find((v) => prefer.test(v.lang))) || vs[0] || null;
+  }
+  function languageName(lang) {
+    try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(lang.split('-')[0]); } catch (e) { return lang; }
+  }
   function speakDevice(token, pos, offset, fellBack) {
     player.engine = 'device';
     audio.pause();
@@ -1287,10 +1349,10 @@
     let voice = currentVoice();
     const lang = langOf(pos.b);
     if (lang !== 'en') {
-      voice = synth.getVoices().find((v) => new RegExp('^' + (lang === 'he' ? '(he|iw)' : 'el'), 'i').test(v.lang)) || null;
+      voice = voiceFor(lang);
       if (!voice) {
         pausePlayer();
-        return toast(`No ${lang === 'he' ? 'Hebrew' : 'Greek'} voice on this device. Add one in your device settings, or switch to an English text.`);
+        return toast(`No ${languageName(lang)} voice on this device. Add one in your device settings, or switch to an English text.`);
       }
     }
     if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-GB';

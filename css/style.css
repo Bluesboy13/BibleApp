@@ -297,11 +297,7 @@ body.follow-verse .v.reading { background: var(--flash); }
 }
 .kjv-under .kref { font-size: .85em; margin-right: .35em; font-variant-numeric: tabular-nums; }
 .kjv-under.none { font-style: italic; }
-#set-text { display: grid; grid-template-columns: 1fr 1fr; }
-#set-text button { padding: 8px 9px; }
-#set-text button + button { border-left: 0; }
-#set-text button:nth-child(even) { border-left: 1px solid var(--rule); }
-#set-text button:nth-child(n+3) { border-top: 1px solid var(--rule); }
+
 /* Hebrew: right to left, in a typeface made for pointed Hebrew */
 .chapter[lang="he"] { font-family: "Noto Serif Hebrew", var(--serif); font-size: 1.12em; line-height: 1.9; }
 .chapter[lang="he"] p { text-align: right; hyphens: manual; }
@@ -361,3 +357,4 @@ body.playing #versebar { bottom: calc(84px + env(safe-area-inset-bottom)); }
 .pbtn.mute svg { fill: none; stroke-width: 1.6; }
 .pbtn.mute svg path:first-child { fill: currentColor; }
 .pbtn.mute.on { color: var(--accent); background: var(--hover); }
+.text-pick { min-width: 0; max-width: 230px; font: inherit; font-size: 14px; padding: 7px 8px; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); color: var(--text); }
