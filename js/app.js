@@ -28,7 +28,7 @@
 
   // ---------- Saved state ----------
   const DEFAULTS = {
-    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left', voice: '', rate: 0.9, follow: 'word', text: 'kjv', under: false },
+    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left', voice: '', rate: 0.9, follow: 'verse', text: 'kjv', under: false },
     ribbon: { b: 0, c: 1, v: 1 },
     ribbonText: 'kjv',         // which text's numbering the ribbon is in
     bookmarks: [],
@@ -39,8 +39,11 @@
   function loadState() {
     let s = {};
     try { s = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { /* ignore */ }
+    const settings = { ...DEFAULTS.settings, ...s.settings };
+    // Highlighting the whole verse became the default; keep "Word" only for those who picked it.
+    if (!settings.followSet) settings.follow = 'verse';
     return {
-      settings: { ...DEFAULTS.settings, ...s.settings },
+      settings,
       ribbon: { ...DEFAULTS.ribbon, ...s.ribbon },
       ribbonText: s.ribbonText || 'kjv',
       bookmarks: Array.isArray(s.bookmarks) ? s.bookmarks : [],
@@ -1498,6 +1501,7 @@
   $('#set-follow').addEventListener('click', (e) => {
     if (!e.target.dataset.v) return;
     state.settings.follow = e.target.dataset.v;   // display only: no need to re-lay out the page
+    state.settings.followSet = true;
     applySettings();
     save();
   });
