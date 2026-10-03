@@ -29,6 +29,7 @@
     ['fr-mar', 'Français (French)', 'Martin 1744', 'Martin', 'fr'],
     ['it-riv', 'Italiano (Italian)', 'Riveduta 1927', 'Riveduta', 'it'],
     ['tl-ab', 'Tagalog', 'Ang Biblia 1905', 'Ang Biblia', 'tl'],
+    ['bcl-1909', 'Bikol (Bicolano)', 'An Bagong Tipan 1909 (New Testament, from a scan)', 'Bagong Tipan 1909', 'bcl'],
     ['zh-cuv', '中文 (Chinese)', '和合本 (简体)', '和合本', 'zh-Hans'],
     ['zh-cuvt', '中文 (Chinese)', '和合本 (繁體)', '和合本', 'zh-Hant'],
     ['ru-syn', 'Русский (Russian)', 'Синодальный перевод', 'Синодальный', 'ru'],

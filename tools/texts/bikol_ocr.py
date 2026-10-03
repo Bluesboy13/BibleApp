@@ -2,7 +2,7 @@
 public domain) from the OCR text of the University of Michigan scan on archive.org
 (ajg9045.0001.001.umich.edu_djvu.txt), verse by verse, with automatic OCR corrections.
 
-Usage: python bikol_ocr.py DJVU_TXT OUT_JSON
+Usage: python bikol_ocr.py OUT_JSON OCR_TXT [OCR_TXT ...]   (e.g. the library's ABBYY text and a Tesseract re-read)
 Chapters are found from "CAPITULO" headings and verse 1 restarts and laid out by the KJV's
 chapter counts; every chapter's verse count is checked against the KJV and reported.
 """
@@ -85,6 +85,16 @@ def join(lines):
     return re.sub(r"\s+", " ", t)
 
 
+def verse_number(tok, expected):
+    """A printed verse number, allowing for common OCR misreadings (2 read as 9, a stray digit)."""
+    d = tok.translate(DIGITLIKE)
+    tries = [d, d.replace("9", "2", 1), d[1:], d[:-1], d.replace("8", "3", 1), d.replace("6", "5", 1)]
+    for t in tries:
+        if t.isdigit() and expected <= int(t) <= expected + 2:
+            return int(t)
+    return int(d) if d.isdigit() else None
+
+
 def roman(s):
     s = s.upper().replace("1", "I").replace("L", "I").replace("T", "I").strip(" .")
     s = re.sub(r"[^IVX]", "", s)
@@ -109,7 +119,8 @@ def parse(text):
             # Resynchronise on the page's running head: right book, and at least its first chapter.
             # (OCR misreads digits in the heads, so within a book only step one chapter, and only
             # when the current chapter is nearly complete.)
-            done = cur is not None and bi >= 0 and len(cur) >= 0.8 * len(KJV[NT[bi]][1][ch - 1]) if 0 < ch <= len(KJV[NT[bi]][1]) else False
+            done = (cur is not None and 0 <= bi < len(NT) and 0 < ch <= len(KJV[NT[bi]][1])
+                    and len(cur) >= 0.8 * len(KJV[NT[bi]][1][ch - 1]))
             if hb > bi or (hb == bi and hc == ch + 1 and done):
                 if hb != bi:
                     bi, ch = hb, max(1, hc)
@@ -124,6 +135,8 @@ def parse(text):
             n = roman(mc.group(1))
             # "Chapter I" starts the next book only once this one is (nearly) complete; otherwise
             # it is a misread numeral.
+            if bi >= len(NT):
+                continue            # past Revelation (end matter)
             if bi < 0 or (n == 1 and ch >= len(KJV[NT[bi]][1]) - 1):
                 bi, ch = bi + 1, 1
             else:
@@ -137,8 +150,8 @@ def parse(text):
         if cur is None or bi >= len(NT):
             continue
         m = re.match(r"([0-9lIoOSsBZ]{1,3})\s+(.*)", first)
-        num = int(m.group(1).translate(DIGITLIKE)) if m and re.search(r"\d", m.group(1)) else None
         expected = max(cur) + 1 if cur else 1
+        num = verse_number(m.group(1), expected) if m and re.search(r"\d", m.group(1)) else None
         kc = KJV[NT[bi]][1]
         kjv_len = len(kc[ch - 1]) if ch <= len(kc) else 0
         if num is not None and num in (expected, expected + 1, expected + 2):
@@ -190,13 +203,25 @@ def correct(verses_all):
     return out, sum(1 for k, x in cache.items() if k != x)
 
 
-def main(src, dst):
-    parsed = parse(open(src, encoding="utf-8", errors="replace").read())
-    print("chapters found:", len(parsed), "(KJV NT has 260)")
-    flat, keys, bad = [], [], 0
+def score(ch, lex):
+    """Share of a chapter's words that are common in the book (OCR slips make rare words)."""
+    words = [w for t in ch.values() for w in re.findall(r"[^\W\d_]+", t)]
+    return sum(1 for w in words if lex[w] >= 3) / max(1, len(words))
+
+
+def main(dst, *sources):
+    """Each source is one OCR reading of the whole book; per chapter the best reading is kept."""
+    parsed = [parse(open(src, encoding="utf-8", errors="replace").read()) for src in sources]
+    for src, p in zip(sources, parsed):
+        print(os.path.basename(src), "chapters found:", len(p))
+    lex = collections.Counter(w for p in parsed for ch in p.values() for t in ch.values()
+                              for w in re.findall(r"[^\W\d_]+", t))
+    flat, keys, bad, used = [], [], 0, collections.Counter()
     for bi, b in enumerate(NT):
         for ci, kv in enumerate(KJV[b][1]):
-            ch = parsed.get((bi, ci + 1), {})
+            cands = [(p.get((bi, ci + 1), {}), si) for si, p in enumerate(parsed)]
+            ch, si = min(cands, key=lambda c: (abs((max(c[0]) if c[0] else 0) - len(kv)), -score(c[0], lex)))
+            used[os.path.basename(sources[si])] += 1
             got = max(ch) if ch else 0
             if got != len(kv):
                 bad += 1
@@ -204,6 +229,7 @@ def main(src, dst):
             for v in range(1, max(got, len(kv)) + 1):
                 keys.append((b, ci, v))
                 flat.append(ch.get(v, ""))
+    print("chapters taken from each reading:", dict(used))
     print("chapters not matching the KJV's verse count:", bad)
     fixed, n = correct(flat)
     print("words corrected:", n, "| empty verses:", sum(1 for t in fixed if not t))
@@ -217,4 +243,4 @@ def main(src, dst):
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:3])
+    main(sys.argv[1], *sys.argv[2:])
