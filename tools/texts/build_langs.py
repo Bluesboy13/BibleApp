@@ -59,7 +59,61 @@ TEXTS = {
     "ht": ("eb", "hat", "ht", "Bib La"),
     "haw": ("eb", "haw1868", "haw", "Baibala Hemolele 1868"),
     "to": ("eb", "ton", "to", "Ko e Tohi Tapu"),
+    # Freely licensed (Creative Commons), for languages with no public-domain Bible available.
+    "hi-irv": ("eb", "hin2017", "hi", "इंडियन रिवाइज्ड वर्जन (IRV)"),
+    "bn-irv": ("eb", "benirv", "bn", "ইন্ডিয়ান রিভাইজড ভার্সন (IRV)"),
+    "ta-irv": ("eb", "tam2017", "ta", "இண்டியன் ரிவைஸ்டு வெர்ஸன் (IRV)"),
+    "te-irv": ("eb", "tel2017", "te", "ఇండియన్ రివైజ్డ్ వెర్షన్ (IRV)"),
+    "mr-irv": ("eb", "mar", "mr", "इंडियन रीवाइज्ड वर्जन (IRV)"),
+    "gu-irv": ("eb", "guj2017", "gu", "ઇન્ડિયન રીવાઇઝ્ડ વર્ઝન (IRV)"),
+    "pa-irv": ("eb", "pan", "pa", "ਇੰਡਿਅਨ ਰਿਵਾਇਜ਼ਡ ਵਰਜ਼ਨ (IRV)"),
+    "kn-irv": ("eb", "kanirv", "kn", "ಇಂಡಿಯನ್ ರಿವೈಜ್ಡ್ ವರ್ಸನ್ (IRV)"),
+    "or-irv": ("eb", "ory", "or", "ଇଣ୍ଡିୟାନ ରିୱାଇସ୍ଡ୍ ୱରସନ୍ (IRV)"),
+    "ur-geo": ("eb", "urdgvu", "ur", "اُردو جیو ورژن"),
+    "id-ayt": ("eb", "indayt", "id", "Alkitab Yang Terbuka"),
+    "sw-ulb": ("eb", "swhulb", "sw", "Biblia Takatifu (ULB)"),
+    "tr-ytc": ("eb", "turytc", "tr", "Yorumsuz Türkçe Çeviri"),
+    "ne-ulb": ("eb", "npiulb", "ne", "पवित्र बाइबल (ULB)"),
+    "ceb-ulb": ("eb", "cebulb", "ceb", "Balaan nga Bibliya (ULB)"),
+    "ilo-ulb": ("eb", "iloulb", "ilo", "Ti Biblia (ULB)"),
+    "so": ("eb", "som", "so", "Kitaabka Quduuska Ah"),
+    "yo": ("eb", "yor", "yo", "Bíbélì Mímọ́ (Open)"),
+    "ha": ("eb", "hausa", "ha", "Littafi Mai Tsarki (Open)"),
+    "ig": ("eb", "ibo", "ig", "Baịbụlụ Nsọ (Open)"),
 }
+
+# Book names in each language: from eBible's BookNames.xml of the text itself, or of another
+# edition in the same language for texts from the other sources.
+NAMES_FROM = {
+    "de-elb": "deu1912", "de-lut": "deu1912", "es-rv": "spabll", "fr-mar": "fraLSG", "it-riv": "ita1927",
+    "tl-ab": "tglulb", "zh-cuv": "cmn-cu89s", "zh-cuvt": "cmn-cu89t", "ru-syn": "russyn", "nl-sv": "nld",
+    "pl-gd": "polubg", "cs-bkr": "ces1613", "sv-1917": "swe", "da-1871": "dan1931", "ja-kougo": "jpnm",
+    "vi-1934": "vie1934", "th": "thaKJV", "ml-1910": "mal2015", "my-jud": "myajvb", "sr-dk": "srp1868",
+    "mi": "mri2012",
+}
+
+
+def book_names(eb_dir, ebid, lang=""):
+    path = os.path.join(eb_dir, ebid, "BookNames.xml")
+    if not os.path.exists(path):
+        return {}
+    names = {}
+    for m in re.finditer(r'<book code="(\w+)"([^>]*)/>', open(path, encoding="utf-8-sig").read()):
+        attrs = dict(re.findall(r'(\w+)="([^"]*)"', m.group(2)))
+        tidy = lambda x: re.sub(r"\s+", " ", re.sub("[\u200b\ufeff]", "", x).replace("~", " ")).strip()
+        short, long_ = tidy(attrs.get("short", "")), tidy(attrs.get("long", ""))
+        numbered = re.match(r"^([0-9]+|[IV]+)\.? ", short)
+        if long_ and len(long_) <= 30 and not numbered and "." in short:
+            short = long_   # an abbreviation such as "ગી.શા."
+        # Some editions give an abbreviation as the short name; use the full name then.
+        n = long_ if long_ and (not short or (long_.startswith(short.rstrip(".")) and len(long_) <= 20)) else short
+        if m.group(1) in USFM and n:
+            if n.isupper() and len(n) >= 3:
+                low = (lambda x: x.replace("I", "ı").replace("İ", "i").lower()) if lang == "tr" else str.lower
+                n = " ".join(w[:1] + low(w[1:]) for w in n.split(" "))
+                n = re.sub(r"\b(Ii|Iii|Iv)\b", lambda w: w.group(1).upper(), n)
+            names[USFM.index(m.group(1))] = n
+    return names
 
 OSIS = ("Gen Exod Lev Num Deut Josh Judg Ruth 1Sam 2Sam 1Kgs 2Kgs 1Chr 2Chr Ezra Neh Esth Job Ps Prov Eccl "
         "Song Isa Jer Lam Ezek Dan Hos Joel Amos Obad Jonah Mic Nah Hab Zeph Hag Zech Mal Matt Mark Luke John "
@@ -125,7 +179,7 @@ def load_usfx(path):
     src = open(path, encoding="utf-8-sig").read()
     src = re.sub(r"<f\b.*?</f>|<x\b.*?</x>|<fe\b.*?</fe>", "", src, flags=re.S)
     # Headings added by editors (section titles, "Psalm 1", "Book 1"), not Scripture.
-    src = re.sub(r"<s\b[^>]*>.*?</s>|<cl>.*?</cl>|<toc\b.*?</toc>|<h>.*?</h>|<id\b.*?</id>|"
+    src = re.sub(r"<s\b[^>]*>.*?</s>|<cl>.*?</cl>|<toc\b.*?</toc>|<h>.*?</h>|<id\b[^>]*/>|<id\b[^/>]*>.*?</id>|"
                  r"<p [^>]*sfm=\"(?:ms|mr|mt\d?|r|s\d?|sp)\"[^>]*>.*?</p>", "", src, flags=re.S)
     books = {}
     for m in re.finditer(r'<book id="(\w+)"(.*?)</book>', src, re.S):
@@ -203,7 +257,7 @@ def check(tid, res, kjv):
     junk = [v for v in allv if re.search(r"https?:|www\.|={3,}|<|>|@|\\", v)]
     if junk:
         probs.append(f"{len(junk)} verses with stray markup, e.g. {junk[0][:80]!r}")
-    return f"{tid}: {len(allv)} verses, {len(res.get('map', {}))} books renumbered" + ("; " + "; ".join(probs) if probs else "")
+    return f"{tid}: {len(allv)} verses, {len(res.get('map', {}))} books renumbered, names: {len(res.get('bookNames', {}))}" + ("; " + "; ".join(probs) if probs else "")
 
 
 def main():
@@ -223,6 +277,9 @@ def main():
         else:
             books = load_usfx(os.path.join(ob_dir, f))
         res = pack(books, kjv)
+        names = book_names(eb_dir, f if src == "eb" else NAMES_FROM.get(tid, ""), lang)
+        if len(names) >= 60:
+            res["bookNames"] = {b: names[b] for b in sorted(names) if b in res["books"]}
         print(check(tid, res, kjv), flush=True)
         with open(os.path.join(DATA, "texts", tid + ".json"), "w", encoding="utf-8") as fh:
             json.dump(res, fh, ensure_ascii=False, separators=(",", ":"))

@@ -60,6 +60,27 @@
     ['ht', 'Kreyòl ayisyen (Haitian Creole)', 'Bib La', 'Bib La', 'ht'],
     ['haw', 'ʻŌlelo Hawaiʻi (Hawaiian)', 'Baibala Hemolele 1868', '1868', 'haw'],
     ['to', 'Lea faka-Tonga (Tongan)', 'Ko e Tohi Tapu', 'Tohi Tapu', 'to'],
+    // Freely licensed (Creative Commons) where no public-domain Bible is available.
+    ['hi-irv', 'हिन्दी (Hindi)', 'इंडियन रिवाइज्ड वर्जन (IRV)', 'IRV', 'hi'],
+    ['bn-irv', 'বাংলা (Bengali)', 'ইন্ডিয়ান রিভাইজড ভার্সন (IRV)', 'IRV', 'bn'],
+    ['ta-irv', 'தமிழ் (Tamil)', 'இண்டியன் ரிவைஸ்டு வெர்ஸன் (IRV)', 'IRV', 'ta'],
+    ['te-irv', 'తెలుగు (Telugu)', 'ఇండియన్ రివైజ్డ్ వెర్షన్ (IRV)', 'IRV', 'te'],
+    ['mr-irv', 'मराठी (Marathi)', 'इंडियन रीवाइज्ड वर्जन (IRV)', 'IRV', 'mr'],
+    ['gu-irv', 'ગુજરાતી (Gujarati)', 'ઇન્ડિયન રીવાઇઝ્ડ વર્ઝન (IRV)', 'IRV', 'gu'],
+    ['pa-irv', 'ਪੰਜਾਬੀ (Punjabi)', 'ਇੰਡਿਅਨ ਰਿਵਾਇਜ਼ਡ ਵਰਜ਼ਨ (IRV)', 'IRV', 'pa'],
+    ['kn-irv', 'ಕನ್ನಡ (Kannada)', 'ಇಂಡಿಯನ್ ರಿವೈಜ್ಡ್ ವರ್ಸನ್ (IRV)', 'IRV', 'kn'],
+    ['or-irv', 'ଓଡ଼ିଆ (Odia)', 'ଇଣ୍ଡିୟାନ ରିୱାଇସ୍ଡ୍ ୱରସନ୍ (IRV)', 'IRV', 'or'],
+    ['ur-geo', 'اردو (Urdu)', 'اُردو جیو ورژن', 'جیو', 'ur'],
+    ['id-ayt', 'Bahasa Indonesia (Indonesian)', 'Alkitab Yang Terbuka', 'AYT', 'id'],
+    ['sw-ulb', 'Kiswahili (Swahili)', 'Biblia Takatifu (ULB)', 'ULB', 'sw'],
+    ['tr-ytc', 'Türkçe (Turkish)', 'Yorumsuz Türkçe Çeviri', 'YTC', 'tr'],
+    ['ne-ulb', 'नेपाली (Nepali)', 'पवित्र बाइबल (ULB)', 'ULB', 'ne'],
+    ['ceb-ulb', 'Cebuano', 'Balaan nga Bibliya (ULB)', 'ULB', 'ceb'],
+    ['ilo-ulb', 'Ilokano', 'Ti Biblia (ULB)', 'ULB', 'ilo'],
+    ['so', 'Soomaali (Somali)', 'Kitaabka Quduuska Ah', 'KQA', 'so'],
+    ['yo', 'Yorùbá', 'Bíbélì Mímọ́ (Open)', 'Bíbélì', 'yo'],
+    ['ha', 'Hausa', 'Littafi Mai Tsarki (Open)', 'LMT', 'ha'],
+    ['ig', 'Igbo', 'Baịbụlụ Nsọ (Open)', 'Baịbụlụ', 'ig'],
   ];
   LANG_TEXTS.forEach(([id, group, name, short, lang]) => { TEXTS[id] = { name, short, file: `data/texts/${id}.json`, lang, group }; });
   let APOC = null;           // the KJV's Apocrypha, for "KJV underneath" in the Septuagint's extra books
@@ -191,7 +212,7 @@
       const fromOt = ot && ot.books[b];
       const fromNt = nt && nt.books[b];
       if (fromOt) {
-        BIBLE.push([name, fromOt]);
+        BIBLE.push([(ot.bookNames || {})[b] || name, fromOt]);   // the book's name in the text's language
         SRC.push(id);
         CHLABELS.push((ot.chapters || {})[b] || null);
         VLABELS.push((ot.labels || {})[b] || null);
