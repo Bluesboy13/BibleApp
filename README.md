@@ -36,6 +36,14 @@ python3 -m http.server 8000
 ```
 Then open http://localhost:8000.
 
+## AI translation drafts (prototype)
+`tools/translate/translate.py` drafts a passage into another language with Claude, working from the Greek or Hebrew with the KJV as an English anchor and, optionally, an existing Bible in that language for terminology:
+```
+pip install anthropic   # and set ANTHROPIC_API_KEY
+python3 tools/translate/translate.py "John 3:16-18" --to Swahili --reference sw-ulb
+```
+Each verse comes back with a literal English back-translation, a confidence level and notes for the reviewer, saved to `drafts/<language>/`. Every file is marked **AI draft, needs human review**, with each verse's review status set to "pending". Drafts are never added to the app's texts. Add `--dry-run` to see the prompt without calling the API.
+
 ## Texts and credits
 - **KJV** — 1769 text, public domain.
 - **Septuagint, Greek** — the Greek text printed with Brenton's Septuagint (1851), from eBible.org (`grcbrent`), public domain.
