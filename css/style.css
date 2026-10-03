@@ -358,3 +358,5 @@ body.playing #versebar { bottom: calc(84px + env(safe-area-inset-bottom)); }
 .pbtn.mute svg path:first-child { fill: currentColor; }
 .pbtn.mute.on { color: var(--accent); background: var(--hover); }
 .text-pick { min-width: 0; max-width: 230px; font: inherit; font-size: 14px; padding: 7px 8px; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); color: var(--text); }
+.text-choose { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; min-width: 0; }
+#text-search { width: 230px; max-width: 100%; font: inherit; font-size: 14px; padding: 7px 8px; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); color: var(--text); }

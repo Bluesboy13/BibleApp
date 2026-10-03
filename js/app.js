@@ -150,7 +150,8 @@
   const kjvRef = (p) => `${KJV[p.b][0]} ${p.c}:${p.v}`;
   // Language of a book in the text on screen: Hebrew, Greek or English.
   const langOf = (b) => (SRC[b] === 'tr' ? 'el' : (TEXTS[SRC[b]] || {}).lang || 'en');
-  const isRtl = (lang) => /^(he|ar|fa|ur)/.test(lang);
+  const isRtl = (lang) => /^(he|ar|fa|ur|ps|ckb|yi|syr)/.test(lang);
+  const rtlBook = (b) => (TEXTS[SRC[b]] || {}).dir === 'rtl' || isRtl(langOf(b));
 
   // ----- Moving between a text's numbering and the KJV's -----
   const isExtra = (b) => b >= 66;
@@ -241,10 +242,35 @@
     }
     return true;
   }
+  // Many more languages live in the FreeBiblos/BibleApp-texts repo (gzip-compressed, listed in its
+  // index.json); they join the Text menu once the list has been fetched.
+  const REMOTE_TEXTS = 'https://freebiblos.github.io/BibleApp-texts/texts/';
+  let remoteIndex = null;
+  async function loadRemoteIndex() {
+    if (remoteIndex) return remoteIndex;
+    try {
+      const list = await (await fetch(REMOTE_TEXTS + 'index.json')).json();
+      list.forEach((e) => {
+        if (TEXTS[e.id]) return;
+        TEXTS[e.id] = { name: e.name, short: e.short, file: REMOTE_TEXTS + e.id + '.json.gz', lang: e.lang, dir: e.dir, group: e.group, license: e.license };
+        LANG_TEXTS.push([e.id, e.group, e.name, e.short, e.lang]);
+      });
+      remoteIndex = list;
+      if (typeof fillTexts === 'function') fillTexts();
+    } catch (e) { /* offline: the built-in texts are still there */ }
+    return remoteIndex;
+  }
+  async function fetchJson(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    if (!url.endsWith('.gz')) return res.json();
+    if (typeof DecompressionStream === 'undefined') throw new Error('This browser is too old to open this text.');
+    return new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).json();
+  }
   async function loadText(id) {
     const t = TEXTS[id] || TEXTS.kjv;
     for (const f of [t.file, t.nt, t.apoc].filter(Boolean)) {
-      if (!loadedTexts[f]) loadedTexts[f] = await (await fetch(f)).json();
+      if (!loadedTexts[f]) loadedTexts[f] = await fetchJson(f);
     }
     if (t.apoc) APOC = loadedTexts[t.apoc];
   }
@@ -271,7 +297,7 @@
     const poetry = isPoetry(b, c);
     const under = state.settings.under && SRC[b] !== 'kjv' && (!isExtra(b) || (MAP[b] && APOC));
     const lang = langOf(b);
-    let h = `<section class="chapter${poetry ? ' poetry' : ''}${under ? ' with-under' : ''}" data-b="${b}" data-c="${c}" lang="${lang}"${isRtl(lang) ? ' dir="rtl"' : ''}>`;
+    let h = `<section class="chapter${poetry ? ' poetry' : ''}${under ? ' with-under' : ''}" data-b="${b}" data-c="${c}" lang="${lang}"${rtlBook(b) ? ' dir="rtl"' : ''}>`;
     h += `<p><span class="dropcap">${esc(chLabel(b, c))}</span>`;
     verses.forEach((t, i) => {
       // ¶ marks a paragraph break in the text; start a new paragraph there in prose.
@@ -647,16 +673,26 @@
   // The Text menu: the KJV and original-language texts first, then other languages.
   function fillTexts() {
     const sel = $('#set-text');
+    const q = ($('#text-search').value || '').trim().toLowerCase();
+    const match = (id, group) => !q || id === state.settings.text || `${group} ${TEXTS[id].name}`.toLowerCase().includes(q);
     const opt = (id) => `<option value="${id}">${esc(TEXTS[id].name)}</option>`;
-    let h = `<optgroup label="English &amp; original languages">${['kjv', 'lxx-en', 'lxx-gr', 'wlc'].map(opt).join('')}</optgroup>`;
+    const core = ['kjv', 'lxx-en', 'lxx-gr', 'wlc'].filter((id) => match(id, 'English Greek Hebrew Septuagint'));
+    let h = core.length ? `<optgroup label="English &amp; original languages">${core.map(opt).join('')}</optgroup>` : '';
     const groups = {};
-    LANG_TEXTS.forEach(([id, group]) => (groups[group] = groups[group] || []).push(id));
+    LANG_TEXTS.forEach(([id, group]) => { if (match(id, group)) (groups[group] = groups[group] || []).push(id); });
     Object.keys(groups).sort((a, z) => a.localeCompare(z)).forEach((g) => { h += `<optgroup label="${esc(g)}">${groups[g].map(opt).join('')}</optgroup>`; });
     sel.innerHTML = h;
     sel.value = state.settings.text;
   }
   fillTexts();
   $('#set-text').addEventListener('change', (e) => changeText(e.target.value));
+  $('#text-search').addEventListener('input', () => {
+    fillTexts();
+    const sel = $('#set-text');
+    // Jump straight to the first match so it can be chosen with one more tap.
+    if ($('#text-search').value.trim() && sel.options.length > 1 && sel.options[0].value === state.settings.text) sel.selectedIndex = 0;
+  });
+  $('#btn-set').addEventListener('click', () => loadRemoteIndex());
   // Switch between the KJV and the Septuagint, keeping the reader's place.
   async function changeText(id) {
     if (id === state.settings.text || !KJV) return;
@@ -1647,6 +1683,8 @@
     }
     KJV.forEach((book, b) => book[1].forEach((_, i) => CHAPTERS.push([b, i + 1])));
     buildText('kjv');
+    if (!TEXTS[state.settings.text]) await loadRemoteIndex();   // a language from the texts repo
+    else loadRemoteIndex();
     if (state.settings.text !== 'kjv') {
       try { await loadText(state.settings.text); } catch (e) { /* offline before first download */ }
       if (!buildText(state.settings.text)) {

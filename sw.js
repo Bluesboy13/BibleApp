@@ -1,6 +1,6 @@
 // Offline support: cache the app and the Bible text on first visit.
 // Bump CACHE whenever files change so phones pick up a complete, matching set.
-const CACHE = 'kjv-v24';
+const CACHE = 'kjv-v25';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/sync.js', 'js/firebase-config.js',
   'vendor/firebase.js', 'data/kjv.json', 'manifest.webmanifest',
@@ -34,6 +34,11 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
+  // Bibles from the FreeBiblos texts repo are kept once downloaded (its list is checked online first).
+  if (url.hostname === 'freebiblos.github.io' && url.pathname.startsWith('/BibleApp-texts/')) {
+    e.respondWith(url.pathname.endsWith('/index.json') ? networkFirst(e.request) : cacheFirst(e.request));
+    return;
+  }
   if (url.origin !== self.location.origin && !isFont(url)) return;
   // Recorded audio streams straight from the server (media needs range requests).
   if (url.pathname.includes('/audio/')) return;
