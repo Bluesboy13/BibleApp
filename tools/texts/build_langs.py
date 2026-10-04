@@ -60,6 +60,18 @@ TEXTS = {
     "haw": ("eb", "haw1868", "haw", "Baibala Hemolele 1868"),
     "to": ("eb", "ton", "to", "Ko e Tohi Tapu"),
     # Freely licensed (Creative Commons), for languages with no public-domain Bible available.
+    # English: literal and KJV-family Bibles
+    "en-akjv": ("sm", "AKJV", "en", "American King James Version"),
+    "en-ukjv": ("sm", "UKJV", "en", "Updated King James Version"),
+    "en-web": ("eb", "engwebp", "en", "World English Bible"),
+    "en-msb": ("eb", "engmsb", "en", "Majority Standard Bible"),
+    "en-bsb": ("eb", "engbsb", "en", "Berean Standard Bible"),
+    "en-lsv": ("eb", "englsv", "en", "Literal Standard Version"),
+    "en-asv": ("eb", "eng-asv", "en", "American Standard Version (1901)"),
+    "en-ylt": ("eb", "engylt", "en", "Young's Literal Translation"),
+    "en-dby": ("eb", "engDBY", "en", "Darby Translation"),
+    "en-web1833": ("eb", "engwebster", "en", "Webster's Bible (1833)"),
+    "en-gnv": ("eb", "enggnv", "en", "Geneva Bible (1599)"),
     "hi-irv": ("eb", "hin2017", "hi", "इंडियन रिवाइज्ड वर्जन (IRV)"),
     "bn-irv": ("eb", "benirv", "bn", "ইন্ডিয়ান রিভাইজড ভার্সন (IRV)"),
     "ta-irv": ("eb", "tam2017", "ta", "இண்டியன் ரிவைஸ்டு வெர்ஸன் (IRV)"),
@@ -278,7 +290,7 @@ def main():
             books = load_usfx(os.path.join(ob_dir, f))
         res = pack(books, kjv)
         names = book_names(eb_dir, f if src == "eb" else NAMES_FROM.get(tid, ""), lang)
-        if len(names) >= 60:
+        if len(names) >= 60 and lang != "en":   # English texts keep the KJV's book names
             res["bookNames"] = {b: names[b] for b in sorted(names) if b in res["books"]}
         print(check(tid, res, kjv), flush=True)
         with open(os.path.join(DATA, "texts", tid + ".json"), "w", encoding="utf-8") as fh:
