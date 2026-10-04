@@ -7,6 +7,7 @@ Chapters are found from "CAPITULO" headings and verse 1 restarts and laid out by
 chapter counts; every chapter's verse count is checked against the KJV and reported.
 """
 import collections
+import difflib
 import json
 import os
 import re
@@ -216,10 +217,21 @@ def main(dst, *sources):
         print(os.path.basename(src), "chapters found:", len(p))
     lex = collections.Counter(w for p in parsed for ch in p.values() for t in ch.values()
                               for w in re.findall(r"[^\W\d_]+", t))
+    # A reading whose chapter starts like a *different* chapter of the first reading has lost its
+    # place (e.g. Romans 5 filed as Revelation 21): never use it there.
+    def opening(ch):
+        return next((t for _, t in sorted(ch.items()) if t), "")[:120]
+    starts = {k: opening(ch) for k, ch in parsed[0].items() if opening(ch)}
+
+    def misplaced(key, ch):
+        o = opening(ch)
+        return bool(o) and any(k != key and difflib.SequenceMatcher(None, o, s0).ratio() > 0.8
+                               for k, s0 in starts.items() if abs(len(s0) - len(o)) < 40)
     flat, keys, bad, used = [], [], 0, collections.Counter()
     for bi, b in enumerate(NT):
         for ci, kv in enumerate(KJV[b][1]):
-            cands = [(p.get((bi, ci + 1), {}), si) for si, p in enumerate(parsed)]
+            cands = [(p.get((bi, ci + 1), {}), si) for si, p in enumerate(parsed)
+                     if si == 0 or not misplaced((bi, ci + 1), p.get((bi, ci + 1), {}))]
             ch, si = min(cands, key=lambda c: (abs((max(c[0]) if c[0] else 0) - len(kv)), -score(c[0], lex)))
             used[os.path.basename(sources[si])] += 1
             got = max(ch) if ch else 0
