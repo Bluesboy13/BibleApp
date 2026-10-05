@@ -302,7 +302,7 @@
 
   // ---------- Rendering ----------
   function titleHTML(b) {
-    return `<h1 class="book-title">${esc(bookName(b))}</h1><div class="ornament">❧</div>`;
+    return `<h1 class="book-title">${esc(bookName(b))}</h1>`;
   }
   function chapterHTML(b, c) {
     const verses = BIBLE[b][1][c - 1];
