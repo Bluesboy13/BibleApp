@@ -44,7 +44,9 @@ const friendly = (e) => ({
   'auth/too-many-requests': 'Too many tries. Please wait a minute and try again.',
   'auth/network-request-failed': 'No connection. Please try again when you’re online.',
   'auth/operation-not-allowed': 'This sign-in method isn’t switched on yet.',
-}[e && e.code] || 'That didn’t work. Please try again.');
+  'auth/unauthorized-domain': 'Sign-in isn’t allowed on this website yet.',
+  'auth/popup-blocked': 'Your browser blocked the sign-in window. Please allow pop-ups and try again.',
+}[e && e.code] || `That didn’t work. Please try again.${e && e.code ? ` (${e.code})` : ''}`);
 
 if (!firebaseConfig.apiKey) {
   statusEl.textContent = 'Sign-in isn’t set up yet.';
