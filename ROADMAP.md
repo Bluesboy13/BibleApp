@@ -54,8 +54,8 @@ KJV, and replace `bcl-1909` with the full Bible.
 
 ## Other open items
 
-- [ ] Firebase sign-in: paste the `firebaseConfig` for the FreeBiblos project into
-      `js/firebase-config.js`, enable Google + Email sign-in, create Firestore, publish
+- [ ] Firebase sign-in: config added (Oct 2026); still to do in the console:
+      enable Google + Email sign-in, create Firestore, publish
       `firestore.rules`.
 - [ ] freebiblos.com: if bought, point it at the app (CNAME) and add it to Firebase's
       authorized domains.
