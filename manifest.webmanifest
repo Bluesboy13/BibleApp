@@ -1,6 +1,6 @@
 {
-  "name": "KJV Bible",
-  "short_name": "KJV Bible",
+  "name": "Free Bible",
+  "short_name": "Free Bible",
   "description": "A simple, book-like King James Bible reader.",
   "start_url": "./",
   "scope": "./",
