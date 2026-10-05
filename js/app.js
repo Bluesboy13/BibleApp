@@ -103,7 +103,7 @@
 
   // ---------- Saved state ----------
   const DEFAULTS = {
-    settings: { vn: false, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left', voice: '', rate: 0.9, follow: 'verse', text: 'kjv', under: false },
+    settings: { vn: false, cn: true, mode: 'scroll', theme: 'paper', font: 'literata', size: 20, align: 'left', voice: '', rate: 0.9, follow: 'verse', text: 'kjv', under: false },
     ribbon: { b: 0, c: 1, v: 1 },
     ribbonText: 'kjv',         // which text's numbering the ribbon is in
     bookmarks: [],
@@ -641,6 +641,7 @@
     body.classList.remove('theme-paper', 'theme-white', 'theme-night', 'font-literata', 'font-garamond');
     body.classList.add('theme-' + s.theme, 'font-' + s.font);
     body.classList.toggle('hide-vn', !s.vn);
+    body.classList.toggle('hide-cn', !s.cn);
     body.classList.toggle('justify', s.align === 'justify');
     $('#row-under').hidden = s.text === 'kjv';
     // Each chapter carries its own language (and direction for Hebrew).
@@ -653,7 +654,7 @@
     document.querySelector('meta[name="theme-color"]').content = THEME_COLORS[s.theme];
     $('#btn-vn').setAttribute('aria-pressed', String(s.vn));
     if ($('#set-text').value !== s.text) $('#set-text').value = s.text;
-    for (const [id, val] of [['#set-font', s.font], ['#set-theme', s.theme], ['#set-align', s.align], ['#set-under', s.under ? 'on' : 'off'], ['#set-follow', s.follow], ['#set-mode', s.mode], ['#set-vn', s.vn ? 'on' : 'off']]) {
+    for (const [id, val] of [['#set-font', s.font], ['#set-theme', s.theme], ['#set-align', s.align], ['#set-under', s.under ? 'on' : 'off'], ['#set-follow', s.follow], ['#set-mode', s.mode], ['#set-vn', s.vn ? 'on' : 'off'], ['#set-cn', s.cn ? 'on' : 'off']]) {
       $(id).querySelectorAll('button').forEach((btn) => btn.classList.toggle('on', btn.dataset.v === val));
     }
   }
@@ -731,6 +732,7 @@
   }
   $('#set-mode').addEventListener('click', (e) => e.target.dataset.v && changeSetting('mode', e.target.dataset.v));
   $('#set-vn').addEventListener('click', (e) => e.target.dataset.v && changeSetting('vn', e.target.dataset.v === 'on'));
+  $('#set-cn').addEventListener('click', (e) => e.target.dataset.v && changeSetting('cn', e.target.dataset.v === 'on'));
 
   // ---------- Saved verses (highlights) ----------
   // Verses are saved in KJV numbering where there is one, so a highlight shows in every text.

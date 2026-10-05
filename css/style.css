@@ -112,6 +112,10 @@ body.theme-night .dropcap { color: var(--text); }
   margin: 0 .15em 0 .1em; user-select: none;
 }
 body.hide-vn .vn, .v.first .vn { display: none; }
+/* Without chapter numbers: no drop cap, verse 1 gets its number, and a little space marks the new chapter */
+body.hide-cn .dropcap { display: none; }
+body.hide-cn:not(.hide-vn) .v.first .vn { display: inline; }
+body.hide-cn .chapter + .chapter { margin-top: 1em; }
 .v.flash { background: var(--flash); border-radius: 3px; transition: background 1.5s; }
 
 .book-end { margin: 0 0 3em; }
