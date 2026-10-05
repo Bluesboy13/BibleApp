@@ -114,7 +114,7 @@ body.theme-night .dropcap { color: var(--text); }
 body.hide-vn .vn, .v.first .vn { display: none; }
 .v.flash { background: var(--flash); border-radius: 3px; transition: background 1.5s; }
 
-.book-end { text-align: center; color: var(--muted); letter-spacing: .6em; margin: 1.5em 0 3em; }
+.book-end { margin: 0 0 3em; }
 
 /* ---------- Page mode ---------- */
 body.mode-page { overflow: hidden; }

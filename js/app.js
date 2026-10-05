@@ -347,7 +347,7 @@
   function bookHTML(b) {
     let h = `<div class="bk" data-b="${b}">` + titleHTML(b);
     for (let c = 1; c <= chapterCount(b); c++) h += chapterHTML(b, c);
-    return h + '<div class="book-end">❧</div></div>';
+    return h + '<div class="book-end"></div></div>';
   }
   function renderBook(b) {
     bookEl.innerHTML = bookHTML(b);
