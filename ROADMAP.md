@@ -67,3 +67,8 @@ KJV, and replace `bcl-1909` with the full Bible.
       Pampanga 1908.
 - [ ] Book names still in English for Hungarian, Norwegian, Finnish, Bulgarian, Modern Greek,
       Albanian and Malagasy.
+- [ ] About & credits section in the app (plain text, no links): the Creative Commons Bibles
+      require their credit to be shown to readers. List each text's source and license, the voices,
+      and Scourby if licensed.
+- [ ] Alexander Scourby KJV audio: permission request emailed to Scourby Bible Media (Litchfield
+      Associates, Tampa) — waiting for a reply. Use only with a written license.
