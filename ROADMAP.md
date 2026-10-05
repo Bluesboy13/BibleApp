@@ -54,11 +54,8 @@ KJV, and replace `bcl-1909` with the full Bible.
 
 ## Other open items
 
-- [ ] Firebase sign-in: config added (Oct 2026); still to do in the console:
-      enable Google + Email sign-in, create Firestore, publish
-      `firestore.rules`.
-- [ ] freebiblos.com: if bought, point it at the app (CNAME) and add it to Firebase's
-      authorized domains.
+- [x] Firebase sign-in and sync (Oct 2026): Google + email sign-in, Firestore (`nam5`), rules published.
+- [x] freebiblos.com: live (CNAME), added to Firebase's authorized domains.
 - [ ] Greek audio (FreeBiblos/BibleApp-audio-el): recording; check it finishes and plays.
 - [ ] Audio for Spanish, French, German, Italian, Portuguese and the other natural-voice languages,
       one language at a time (repos BibleApp-audio-<code>).
